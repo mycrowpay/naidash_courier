@@ -47,3 +47,49 @@ class NaidashCourierStage(models.Model):
         except Exception as e:
             logger.error(f"An error ocurred while creating the new stage:\n\n{str(e)}")
             raise e
+        
+    def edit_stage(self, stage_id, request_data):
+        try:
+            response_data = dict()
+            courier_manager_group = self.env.user.has_group('courier_manage.courier_management_manager_custom_group')
+            
+            if courier_manager_group:
+                stage = self.env['courier.stage.custom'].search(
+                    [
+                        ('id','=', int(stage_id)), '|', 
+                        ('active','=', True), ('active','=', False)
+                    ]
+                )
+                
+                if stage:            
+                    stage_name = (request_data.get("stage_name")).strip() or stage.name
+                    stage_sequence = request_data.get("stage_sequence") or stage.stage_sequence
+                    is_form_readonly = request_data.get("is_form_readonly") or stage.is_form_readonly
+                    allow_sales_order_creation = request_data.get("allow_sales_order_creation") or stage.is_saleorder
+                    fold_stage = request_data.get("fold_stage") or stage.fold
+                    activate_stage = request_data.get("activate_stage") or stage.active                
+                    
+                    stage_details = dict(
+                        name=stage_name,
+                        stage_sequence=int(stage_sequence),
+                        is_form_readonly=is_form_readonly,
+                        is_saleorder=allow_sales_order_creation,
+                        fold=fold_stage,
+                        active=activate_stage
+                    )
+                        
+                    if stage_details:
+                        stage.update(stage_details)
+                        response_data["status_code"] = 204                
+                        response_data["message"] = "Stage updated successfully"
+                else:
+                    response_data["status_code"] = 404               
+                    response_data["message"] = "Stage Not Found!"                    
+            else:
+                response_data["status_code"] = 403               
+                response_data["message"] = f"{self.env.user.name}, You are not authorized to perform this action!"
+            
+            return response_data
+        except Exception as e:
+            logger.error(f"An error ocurred while modifying the stage:\n\n{str(e)}")
+            raise e

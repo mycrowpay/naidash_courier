@@ -24,3 +24,17 @@ class NaidashCourier(http.Controller):
                 "error": str(e)
             }
             
+    @http.route('/api/v1/naidash/stage/<int:stage_id>', methods=['PATCH'], auth='user', type='json')
+    def edit_stage(self, stage_id, **kw):
+        """Edits the specified stage"""
+                
+        try:
+            request_data = json.loads(request.httprequest.data)
+            edit_courier_stage = request.env['courier.stage.custom'].edit_stage(stage_id, request_data)
+            return edit_courier_stage
+        except Exception as e:
+            logger.exception(f"Error: The following error occurred while modifying the stage:\n\n{str(e)}")
+            return {            
+                "status_code": 500,
+                "error": str(e)
+            }

@@ -14,6 +14,9 @@ class NaidashCourierStage(models.Model):
     _order = "stage_sequence asc"
 
     def create_stage(self, request_data):
+        """Create the stage
+        """ 
+                
         try:
             data = dict()
             response_data = dict()
@@ -35,7 +38,7 @@ class NaidashCourierStage(models.Model):
                 stage = self.env['courier.stage.custom'].create(vals)
 
                 if stage:
-                    data['stage_id'] = stage.id
+                    data['id'] = stage.id
                     response_data["status_code"] = 201                
                     response_data["message"] = "Stage created successfully"
                     response_data["data"] = data
@@ -48,7 +51,10 @@ class NaidashCourierStage(models.Model):
             logger.error(f"An error ocurred while creating the new stage:\n\n{str(e)}")
             raise e
         
-    def edit_stage(self, stage_id, request_data):
+    def edit_stage_details(self, stage_id, request_data):
+        """Edit the stage details
+        """ 
+                
         try:
             response_data = dict()
             courier_manager_group = self.env.user.has_group('courier_manage.courier_management_manager_custom_group')
@@ -92,4 +98,62 @@ class NaidashCourierStage(models.Model):
             return response_data
         except Exception as e:
             logger.error(f"An error ocurred while modifying the stage:\n\n{str(e)}")
+            raise e
+        
+    def get_stage_details(self, stage_id):
+        """Get the stage details
+        """        
+        
+        try:
+            data = dict()            
+            response_data = dict()
+            courier_manager_group = self.env.user.has_group('courier_manage.courier_management_manager_custom_group')
+            
+            # Courier Admins/Managers can search for any stage regardless of the active status
+            if courier_manager_group:
+                stage = self.env['courier.stage.custom'].search(
+                    [
+                        ('id','=', int(stage_id)), '|', 
+                        ('active','=', True), ('active','=', False)
+                    ]
+                )
+                
+                if stage:
+                    data["id"] = stage.id
+                    data["stage_name"] = stage.name
+                    data["stage_sequence"] = stage.stage_sequence
+                    data["is_form_readonly"] = stage.is_form_readonly
+                    data["allow_sales_order_creation"] = stage.is_saleorder
+                    data["fold_stage"] = stage.fold
+                    data["activate_stage"] = stage.active
+                    
+                    response_data["status_code"] = 200
+                    response_data["message"] = "Success"
+                    response_data["data"] = data
+                else:
+                    response_data["status_code"] = 404
+                    response_data["message"] = "Stage Not Found!"
+            else: 
+                # Other users will access active only
+                active_stage = self.env['courier.stage.custom'].search([('id','=', int(stage_id))])
+                
+                if active_stage:
+                    data["id"] = active_stage.id
+                    data["stage_name"] = active_stage.name
+                    data["stage_sequence"] = active_stage.stage_sequence
+                    data["is_form_readonly"] = active_stage.is_form_readonly
+                    data["allow_sales_order_creation"] = active_stage.is_saleorder
+                    data["fold_stage"] = active_stage.fold
+                    data["activate_stage"] = active_stage.active
+                    
+                    response_data["status_code"] = 200
+                    response_data["message"] = "Success"
+                    response_data["data"] = data
+                else:
+                    response_data["status_code"] = 404
+                    response_data["message"] = "Stage Not Found!"
+            
+            return response_data
+        except Exception as e:
+            logger.error(f"The following error ocurred while fetching the stage details:\n\n{str(e)}")
             raise e

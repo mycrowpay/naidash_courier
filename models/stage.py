@@ -20,9 +20,9 @@ class NaidashCourierStage(models.Model):
         try:
             data = dict()
             response_data = dict()
-            courier_manager_group = self.env.user.has_group('courier_manage.courier_management_manager_custom_group')
+            is_courier_manager = self.env.user.has_group('courier_manage.courier_management_manager_custom_group')
             
-            if courier_manager_group:            
+            if is_courier_manager:            
                 stage_name = request_data.get("stage_name")
                 stage_sequence = int(request_data.get("stage_sequence"))
                 is_form_readonly = request_data.get("is_form_readonly", False)
@@ -39,11 +39,11 @@ class NaidashCourierStage(models.Model):
 
                 if stage:
                     data['id'] = stage.id
-                    response_data["status_code"] = 201                
+                    response_data["code"] = 201                
                     response_data["message"] = "Stage created successfully"
                     response_data["data"] = data
             else:
-                response_data["status_code"] = 403               
+                response_data["code"] = 403               
                 response_data["message"] = f"{self.env.user.name}, You are not authorized to perform this action!"
             
             return response_data
@@ -57,9 +57,9 @@ class NaidashCourierStage(models.Model):
                 
         try:
             response_data = dict()
-            courier_manager_group = self.env.user.has_group('courier_manage.courier_management_manager_custom_group')
+            is_courier_manager = self.env.user.has_group('courier_manage.courier_management_manager_custom_group')
             
-            if courier_manager_group:
+            if is_courier_manager:
                 stage = self.env['courier.stage.custom'].search(
                     [
                         ('id','=', int(stage_id)), '|', 
@@ -86,13 +86,13 @@ class NaidashCourierStage(models.Model):
                         
                     if stage_details:
                         stage.update(stage_details)
-                        response_data["status_code"] = 204                
+                        response_data["code"] = 204                
                         response_data["message"] = "Stage updated successfully"
                 else:
-                    response_data["status_code"] = 404               
+                    response_data["code"] = 404               
                     response_data["message"] = "Stage Not Found!"                    
             else:
-                response_data["status_code"] = 403               
+                response_data["code"] = 403               
                 response_data["message"] = f"{self.env.user.name}, You are not authorized to perform this action!"
             
             return response_data
@@ -100,17 +100,18 @@ class NaidashCourierStage(models.Model):
             logger.error(f"An error ocurred while modifying the stage:\n\n{str(e)}")
             raise e
         
-    def get_stage_details(self, stage_id):
+    def get_a_stage(self, stage_id):
         """Get the stage details
         """        
         
         try:
             data = dict()            
             response_data = dict()
-            courier_manager_group = self.env.user.has_group('courier_manage.courier_management_manager_custom_group')
+            is_courier_manager = self.env.user.has_group('courier_manage.courier_management_manager_custom_group')
             
-            # Courier Admins/Managers can search for any stage regardless of the active status
-            if courier_manager_group:
+            # Courier Admins/Managers can search for 
+            # any stage regardless of the active status
+            if is_courier_manager:
                 stage = self.env['courier.stage.custom'].search(
                     [
                         ('id','=', int(stage_id)), '|', 
@@ -127,33 +128,87 @@ class NaidashCourierStage(models.Model):
                     data["fold_stage"] = stage.fold
                     data["activate_stage"] = stage.active
                     
-                    response_data["status_code"] = 200
+                    response_data["code"] = 200
                     response_data["message"] = "Success"
                     response_data["data"] = data
                 else:
-                    response_data["status_code"] = 404
+                    response_data["code"] = 404
                     response_data["message"] = "Stage Not Found!"
             else: 
-                # Other users will access active only
+                # Other users will access active stages only
                 active_stage = self.env['courier.stage.custom'].search([('id','=', int(stage_id))])
                 
                 if active_stage:
                     data["id"] = active_stage.id
                     data["stage_name"] = active_stage.name
                     data["stage_sequence"] = active_stage.stage_sequence
-                    data["is_form_readonly"] = active_stage.is_form_readonly
-                    data["allow_sales_order_creation"] = active_stage.is_saleorder
-                    data["fold_stage"] = active_stage.fold
-                    data["activate_stage"] = active_stage.active
                     
-                    response_data["status_code"] = 200
+                    response_data["code"] = 200
                     response_data["message"] = "Success"
                     response_data["data"] = data
                 else:
-                    response_data["status_code"] = 404
+                    response_data["code"] = 404
                     response_data["message"] = "Stage Not Found!"
             
             return response_data
         except Exception as e:
             logger.error(f"The following error ocurred while fetching the stage details:\n\n{str(e)}")
+            raise e
+        
+    def get_all_stages(self, query_params):
+        """Get all the stages
+        """        
+        
+        try:
+            response_data = dict()
+            all_stages = []
+            is_courier_manager = self.env.user.has_group('courier_manage.courier_management_manager_custom_group')
+            
+            # Courier Admins/Managers can search for 
+            # any stage regardless of the active status
+            if is_courier_manager:
+                stages = self.env['courier.stage.custom'].search(query_params, order='stage_sequence asc')
+                
+                if stages:
+                    for stage in stages:
+                        data = dict()                    
+                        data["id"] = stage.id
+                        data["stage_name"] = stage.name
+                        data["stage_sequence"] = stage.stage_sequence
+                        data["is_form_readonly"] = stage.is_form_readonly
+                        data["allow_sales_order_creation"] = stage.is_saleorder
+                        data["fold_stage"] = stage.fold
+                        data["activate_stage"] = stage.active
+                        
+                        all_stages.append(data)
+                    
+                    response_data["code"] = 200
+                    response_data["message"] = "Success"
+                    response_data["data"] = all_stages
+                else:
+                    response_data["code"] = 404
+                    response_data["message"] = "Stage Not Found!"
+            else: 
+                # Other users will access active stages only
+                all_active_stages = self.env['courier.stage.custom'].search([], order='stage_sequence asc')
+                
+                if all_active_stages:
+                    for active_stage in all_active_stages:
+                        data = dict()
+                        data["id"] = active_stage.id
+                        data["stage_name"] = active_stage.name
+                        data["stage_sequence"] = active_stage.stage_sequence
+                        
+                        all_stages.append(data)
+                        
+                    response_data["code"] = 200
+                    response_data["message"] = "Success"
+                    response_data["data"] = all_stages
+                else:
+                    response_data["code"] = 404
+                    response_data["message"] = "Stage Not Found!"
+            
+            return response_data
+        except Exception as e:
+            logger.error(f"The following error ocurred while fetching the stages:\n\n{str(e)}")
             raise e

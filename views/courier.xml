@@ -1,0 +1,131 @@
+<odoo>
+    <data>
+        <record model="ir.ui.view" id="courier_custom_form_inherited_view_form">
+            <field name="name">courier.custom.form.inherited.view</field>
+            <field name="model">courier.custom</field>
+            <field name="inherit_id" ref="courier_manage.courier_custom_form_view"/>
+            <field name="arch" type="xml">
+                <xpath expr="//field[@name='name']" position="after">
+                    <br/>
+                    <span class="o_form_label o_td_label" name="address_name">
+                        <b>Require's Dropshipping Services? </b>
+                    </span>                    
+                    <field name="is_drop_shipping" widget="boolean_toggle" readonly="is_readonly" />
+
+                    <span class="o_form_label o_td_label" name="address_name">
+                        <b>Invoice The Receiver? </b>
+                    </span>                    
+                    <field name="is_receiver_invoice" widget="boolean_toggle" readonly="is_readonly" />                    
+                </xpath>                
+
+                <!-- The Sender's Details -->
+                <xpath expr="//form/sheet/group[1]/group[1]" position="attributes">
+                    <attribute name="invisible">is_drop_shipping == False</attribute>
+                </xpath>              
+
+                <xpath expr="//field[@name='sender_name_id']" position="replace">
+                    <field name="sender_name_id" required="is_drop_shipping"/>                    
+                </xpath>
+
+                <xpath expr="//form/sheet/group[1]/group[1]/div/field[@name='sender_street']" position="attributes">
+                    <attribute name="required">is_drop_shipping</attribute>
+                </xpath>  
+
+                <xpath expr="//form/sheet/group[1]/group[1]/div/field[@name='sender_street2']" position="attributes">
+                    <attribute name="invisible">1</attribute>
+                </xpath> 
+
+                <xpath expr="//form/sheet/group[1]/group[1]/div/field[@name='sender_city']" position="attributes">
+                    <attribute name="invisible">1</attribute>
+                </xpath> 
+
+                <xpath expr="//form/sheet/group[1]/group[1]/div/field[@name='sender_zip']" position="attributes">
+                    <attribute name="invisible">1</attribute>
+                </xpath>
+
+                <xpath expr="//form/sheet/group[1]/group[1]/div[1]" position="replace">
+                    <div class="o_address_format">
+                        <div name="partner_address_country" class="d-flex justify-content-between">
+                            <field name="sender_country_id" placeholder="Country" class="o_address_country" 
+                            options='{"no_open": True, "no_create": True}' readonly="is_readonly"
+                            required="is_drop_shipping"/>
+
+                            <field name="sender_state_id" placeholder="County/State" options="{'no_open': True, 'no_quick_create': True}" 
+                            readonly="is_readonly" required="is_drop_shipping"/>
+                        </div>
+
+                        <field name="sender_street" placeholder="Street Address" class="o_address_street" readonly="is_readonly"
+                        required="is_drop_shipping"/>
+
+                    </div>
+                </xpath>
+
+                <xpath expr="//form/sheet/group[1]/group[1]/field[@name='sender_mobile']" position="attributes">
+                    <attribute name="required">is_drop_shipping</attribute>
+                </xpath>
+
+                <!-- The Receiver's Details -->
+                <xpath expr="//field[@name='receiver_name']" position="attributes">
+                    <attribute name="invisible">1</attribute>                   
+                </xpath>
+
+                <xpath expr="//field[@name='receiver_name']" position="before">
+                    <field name="receiver_name_id" required="1"/>                    
+                </xpath>                
+
+                <xpath expr="//form/sheet/group[1]/group[2]/div/field[@name='receiver_street']" position="attributes">
+                    <attribute name="required">1</attribute>
+                </xpath>  
+
+                <xpath expr="//form/sheet/group[1]/group[2]/div/field[@name='receiver_street2']" position="attributes">
+                    <attribute name="invisible">1</attribute>
+                </xpath> 
+
+                <xpath expr="//form/sheet/group[1]/group[2]/div/field[@name='receiver_city']" position="attributes">
+                    <attribute name="invisible">1</attribute>
+                </xpath> 
+
+                <xpath expr="//form/sheet/group[1]/group[2]/div/field[@name='receiver_zip']" position="attributes">
+                    <attribute name="invisible">1</attribute>
+                </xpath>
+
+                <xpath expr="//form/sheet/group[1]/group[2]/div[1]" position="replace">
+                    <div class="o_address_format">
+                        <div name="partner_address_country" class="d-flex justify-content-between">
+                            <field name="receiver_country_id" placeholder="Country" class="o_address_country" 
+                            options='{"no_open": True, "no_create": True}' readonly="is_readonly"
+                            required="1"/>
+
+                            <field name="receiver_state_id" placeholder="County/State" options="{'no_open': True, 'no_quick_create': True}" 
+                            readonly="is_readonly" required="1"/>
+                        </div>
+
+                        <field name="receiver_street" placeholder="Street Address" class="o_address_street" readonly="is_readonly"
+                        required="1"/>
+
+                    </div>
+                </xpath>
+
+                <xpath expr="//form/sheet/group[1]/group[2]/field[@name='receiver_mobile']" position="attributes">
+                    <attribute name="required">1</attribute>
+                </xpath>
+
+                <xpath expr="//form/sheet/notebook[1]/page[1]" position="after">
+                    <page string="Metadata">
+                        <group name="courier_request">
+                            <group name="courier_request_column_1">
+                                <field name="create_uid" options="{'no_open': True, 'no_create': True, 'no_create_edit':True}"/>
+                                <field name="create_date" />
+                            </group>
+                            <group name="courier_request_column_2">
+                                <field name="write_uid" options="{'no_open': True, 'no_create': True, 'no_create_edit':True}"/>
+                                <field name="write_date" />
+                            </group>                                                
+                        </group>                    
+                    </page>
+                </xpath>
+
+            </field>
+        </record>
+    </data>
+</odoo>

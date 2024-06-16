@@ -27,6 +27,7 @@
         # 'data/ir_sequence_data.xml',
         'views/views.xml',
         'views/templates.xml',
+        'views/courier.xml',
     ],
     # only loaded in demonstration mode
     'demo': [

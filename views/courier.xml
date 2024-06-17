@@ -27,10 +27,6 @@
                     <field name="sender_name_id" required="is_drop_shipping"/>                    
                 </xpath>
 
-                <xpath expr="//form/sheet/group[1]/group[1]/div/field[@name='sender_street']" position="attributes">
-                    <attribute name="required">is_drop_shipping</attribute>
-                </xpath>  
-
                 <xpath expr="//form/sheet/group[1]/group[1]/div/field[@name='sender_street2']" position="attributes">
                     <attribute name="invisible">1</attribute>
                 </xpath> 
@@ -71,11 +67,7 @@
 
                 <xpath expr="//field[@name='receiver_name']" position="before">
                     <field name="receiver_name_id" required="1"/>                    
-                </xpath>                
-
-                <xpath expr="//form/sheet/group[1]/group[2]/div/field[@name='receiver_street']" position="attributes">
-                    <attribute name="required">1</attribute>
-                </xpath>  
+                </xpath>
 
                 <xpath expr="//form/sheet/group[1]/group[2]/div/field[@name='receiver_street2']" position="attributes">
                     <attribute name="invisible">1</attribute>
@@ -124,6 +116,10 @@
                         </group>                    
                     </page>
                 </xpath>
+
+                <xpath expr="//field[@name='user_id']" position="attributes">
+                    <attribute name="string">Assign To</attribute>                    
+                </xpath>                
 
             </field>
         </record>

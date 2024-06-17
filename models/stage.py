@@ -67,27 +67,35 @@ class NaidashCourierStage(models.Model):
                     ]
                 )
                 
-                if stage:            
-                    stage_name = (request_data.get("stage_name")).strip() or stage.name
-                    stage_sequence = request_data.get("stage_sequence") or stage.stage_sequence
-                    is_form_readonly = request_data.get("is_form_readonly") or stage.is_form_readonly
-                    allow_sales_order_creation = request_data.get("allow_sales_order_creation") or stage.is_saleorder
-                    fold_stage = request_data.get("fold_stage") or stage.fold
-                    activate_stage = request_data.get("activate_stage") or stage.active                
+                if stage:
+                    search_param_values = ["", None]
+                    stage_details = dict()
+                                
+                    if request_data.get("stage_name") not in search_param_values:
+                        stage_details["name"] = (request_data.get("stage_name")).strip()
+
+                    if request_data.get("stage_sequence") not in search_param_values:
+                        stage_details["stage_sequence"] = int(request_data.get("stage_sequence")) 
+                        
+                    if request_data.get("is_form_readonly") not in search_param_values:
+                        stage_details["is_form_readonly"] = request_data.get("is_form_readonly")                    
                     
-                    stage_details = dict(
-                        name=stage_name,
-                        stage_sequence=int(stage_sequence),
-                        is_form_readonly=is_form_readonly,
-                        is_saleorder=allow_sales_order_creation,
-                        fold=fold_stage,
-                        active=activate_stage
-                    )
+                    if request_data.get("allow_sales_order_creation") not in search_param_values:
+                        stage_details["is_saleorder"] = request_data.get("allow_sales_order_creation")                    
+                    
+                    if request_data.get("fold_stage") not in search_param_values:
+                        stage_details["fold"] = request_data.get("fold_stage")
+
+                    if request_data.get("activate_stage") not in search_param_values:
+                        stage_details["active"] = request_data.get("activate_stage")
                         
                     if stage_details:
                         stage.update(stage_details)
-                        response_data["code"] = 204                
+                        response_data["code"] = 200                
                         response_data["message"] = "Stage updated successfully"
+                    else:
+                        response_data["code"] = 204                
+                        response_data["message"] = "Nothing to update"                        
                 else:
                     response_data["code"] = 404               
                     response_data["message"] = "Stage Not Found!"                    
@@ -95,7 +103,10 @@ class NaidashCourierStage(models.Model):
                 response_data["code"] = 403               
                 response_data["message"] = f"{self.env.user.name}, You are not authorized to perform this action!"
             
-            return response_data
+            return response_data        
+        except TypeError as e:
+            logger.error(f"Datatype error ocurred while modifying the stage:\n\n{str(e)}")
+            raise e        
         except Exception as e:
             logger.error(f"An error ocurred while modifying the stage:\n\n{str(e)}")
             raise e

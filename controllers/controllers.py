@@ -34,6 +34,12 @@ class NaidashCourier(http.Controller):
             request_data = json.loads(request.httprequest.data)
             stage_details = request.env['courier.stage.custom'].edit_stage_details(stage_id, request_data)
             return stage_details
+        except TypeError as e:
+            logger.error(f"This datatype error ocurred while modifying the stage:\n\n{str(e)}")
+            return {                
+                "code": 422,
+                "message": str(e)
+            }        
         except Exception as e:
             logger.exception(f"The following error occurred while modifying the stage:\n\n{str(e)}")
             return {            
@@ -147,3 +153,25 @@ class NaidashCourier(http.Controller):
             )
             
             return request.make_response(data, headers, status=500)
+        
+    @route('/api/v1/naidash/courier', methods=['POST'], auth='user', type='json')
+    def create_courier(self, **kw):
+        """Create the courier request
+        """ 
+                        
+        try:
+            request_data = json.loads(request.httprequest.data)                        
+            courier_details = request.env['courier.custom'].create_courier_request(request_data)
+            return courier_details
+        except TypeError as e:
+            logger.error(f"This datatype error ocurred while creating the courier request:\n\n{str(e)}")
+            return {                
+                "code": 422,
+                "message": str(e)
+            }      
+        except Exception as e:
+            logger.exception(f"This error occurred while creating the courier request:\n\n{str(e)}")
+            return {                
+                "code": 500,
+                "message": str(e)
+            }        

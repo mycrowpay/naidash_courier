@@ -148,7 +148,7 @@ class NaidashCourierStage(models.Model):
                     response_data["message"] = "Stage Not Found!"
             else: 
                 # Other users will access active stages only
-                active_stage = self.env['courier.stage.custom'].search([('id','=', int(stage_id))])
+                active_stage = self.env['courier.stage.custom'].browse(int(stage_id))
                 
                 if active_stage:
                     data["id"] = active_stage.id

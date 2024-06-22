@@ -57,6 +57,7 @@ class NaidashCourierStage(models.Model):
                 
         try:
             response_data = dict()
+            search_param_values = ["", None]
             is_courier_manager = self.env.user.has_group('courier_manage.courier_management_manager_custom_group')
             
             if is_courier_manager:
@@ -68,7 +69,6 @@ class NaidashCourierStage(models.Model):
                 )
                 
                 if stage:
-                    search_param_values = ["", None]
                     stage_details = dict()
                                 
                     if request_data.get("stage_name") not in search_param_values:
@@ -89,8 +89,9 @@ class NaidashCourierStage(models.Model):
                     if request_data.get("activate_stage") not in search_param_values:
                         stage_details["active"] = request_data.get("activate_stage")
                         
+                    # Update stage details
                     if stage_details:
-                        stage.update(stage_details)
+                        stage.write(stage_details)
                         response_data["code"] = 200                
                         response_data["message"] = "Stage updated successfully"
                     else:

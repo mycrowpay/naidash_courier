@@ -41,7 +41,7 @@ class NaidashCourier(http.Controller):
                 "message": str(e)
             }        
         except Exception as e:
-            logger.exception(f"The following error occurred while modifying the stage:\n\n{str(e)}")
+            logger.exception(f"This error occurred while modifying the stage:\n\n{str(e)}")
             return {            
                 "code": 500,
                 "message": str(e)
@@ -174,4 +174,26 @@ class NaidashCourier(http.Controller):
             return {                
                 "code": 500,
                 "message": str(e)
+            }
+            
+    @route('/api/v1/naidash/courier/<int:courier_id>', methods=['PATCH'], auth='user', type='json')
+    def edit_courier(self, courier_id, **kw):
+        """Edit the courier details
+        """ 
+                
+        try:
+            request_data = json.loads(request.httprequest.data)
+            courier_details = request.env['courier.custom'].edit_courier_request(courier_id, request_data)
+            return courier_details
+        except TypeError as e:
+            logger.error(f"This datatype error ocurred while modifying the courier request:\n\n{str(e)}")
+            return {                
+                "code": 422,
+                "message": str(e)
             }        
+        except Exception as e:
+            logger.exception(f"This error occurred while modifying the courier request:\n\n{str(e)}")
+            return {            
+                "code": 500,
+                "message": str(e)
+            }            

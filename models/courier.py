@@ -195,7 +195,7 @@ class NaidashCourier(models.Model):
                 description = request_data.get("description")
                 internal_note = request_data.get("internal_note")
                 sender_partner_id = request_data.get("sender_partner_id")
-                items = request_data.get("items")
+                line_items = request_data.get("line_items")                
                 
                 if not receiver_partner_id:
                     response_data["code"] = 400
@@ -252,7 +252,7 @@ class NaidashCourier(models.Model):
                     response_data["message"] = "Bad Request! Remove the sender's details"
                     return response_data 
                 
-                if not items:
+                if not line_items:
                     response_data["code"] = 400
                     response_data["message"] = "Bad Request! Add items to transport"
                     return response_data
@@ -262,9 +262,9 @@ class NaidashCourier(models.Model):
                     response_data["message"] = "Unprocessable Content! Expected a list of integer(s) in `tag_ids`"
                     return response_data                
                 
-                if isinstance(items, list) == False :
+                if isinstance(line_items, list) == False :
                     response_data["code"] = 422
-                    response_data["message"] = "Unprocessable Content! Expected a list of objects in `items`"
+                    response_data["message"] = "Unprocessable Content! Expected a list of objects in `line_items`"
                     return response_data
                 
                 if is_drop_shipping not in search_param_values:
@@ -381,7 +381,7 @@ class NaidashCourier(models.Model):
                         response_data["message"] = "Tag Not Found!"
                         return response_data
                     
-                if items:
+                if line_items:
                     product = self.env['product.product'].search(
                         [
                             ('name', '=', 'Courier Service'),
@@ -390,7 +390,7 @@ class NaidashCourier(models.Model):
                     ).id
                     
                     if product:
-                        for item in items:
+                        for item in line_items:
                             courier_items = {
                                 "product_id": product,
                                 "name": item.get("name"),
@@ -425,4 +425,236 @@ class NaidashCourier(models.Model):
             raise e
         except Exception as e:
             logger.error(f"An error ocurred while creating the courier request:\n\n{str(e)}")
-            raise e        
+            raise e
+        
+    def edit_courier_request(self, courier_id, request_data):
+        """Edit the Courier Request details
+        """
+        
+        try:
+            response_data = dict()
+            items_to_transport = []            
+            search_param_values = ["", None, []]
+            is_courier_manager = self.env.user.has_group('courier_manage.courier_management_manager_custom_group')
+            
+            if is_courier_manager:
+                courier_details = dict()                
+                
+                courier = self.env['courier.custom'].search(
+                    [
+                        ('id','=', int(courier_id)), '|', 
+                        ('active','=', True), ('active','=', False)
+                    ]
+                )
+                
+                if courier:
+                    is_drop_shipping = request_data.get("is_drop_shipping")
+                    is_receiver_invoice = request_data.get("is_receiver_invoice")
+                    receiver_partner_id = request_data.get("receiver_partner_id")
+                    stage_id = request_data.get("stage_id")
+                    category_id = request_data.get("category_id")
+                    priority_id = request_data.get("priority_id")
+                    assigned_user_id = request_data.get("assigned_user_id")
+                    delivery_date = request_data.get("delivery_date")
+                    courier_type = request_data.get("courier_type")    
+                    tag_ids = request_data.get("tag_ids")
+                    distance = request_data.get("distance")
+                    description = request_data.get("description")
+                    internal_note = request_data.get("internal_note")
+                    sender_partner_id = request_data.get("sender_partner_id")
+                    line_items = request_data.get("line_items")
+                    
+                    if is_drop_shipping == True and sender_partner_id in search_param_values:
+                        response_data["code"] = 400
+                        response_data["message"] = "Bad Request! Missing sender's partner id"
+                        return response_data
+                        
+                    if is_drop_shipping == False and is_receiver_invoice == False:
+                        response_data["code"] = 400
+                        response_data["message"] = "Bad Request! Receiver must be invoiced"
+                        return response_data
+                        
+                    if is_drop_shipping == False and sender_partner_id:
+                        response_data["code"] = 400
+                        response_data["message"] = "Bad Request! Remove the sender's details"
+                        return response_data
+                        
+                    if distance not in search_param_values:
+                        courier_details["distance"] = float(distance)
+                        
+                    if delivery_date not in search_param_values:
+                        courier_details["delivery_date"] = delivery_date
+                        
+                    if courier_type not in search_param_values:
+                        courier_details["courier_type"] = courier_type
+                        
+                    if description not in search_param_values:
+                        courier_details["description"] = description
+                        
+                    if internal_note not in search_param_values:
+                        courier_details["internal_note"] = internal_note                                        
+                    
+                    if is_drop_shipping not in search_param_values:
+                        courier_details["is_drop_shipping"] = is_drop_shipping
+                            
+                    if is_receiver_invoice not in search_param_values:
+                        courier_details["is_receiver_invoice"] = is_receiver_invoice                
+                    
+                    if stage_id not in search_param_values:
+                        stage = self.env['courier.stage.custom'].search(
+                            [
+                                ('id','=', int(stage_id)), '|', 
+                                ('active','=', True), ('active','=', False)
+                            ]
+                        )
+                        
+                        if stage:
+                            courier_details["stage_id"] = stage.id
+                        else:
+                            response_data["code"] = 404
+                            response_data["message"] = "Stage Not Found!"
+                            return response_data                    
+                    
+                    if assigned_user_id not in search_param_values:
+                        user = self.env['res.users'].search(
+                            [
+                                ('id','=', int(assigned_user_id))
+                            ]
+                        )                    
+                        
+                        if user:
+                            courier_details["user_id"] = user.id
+                        else:
+                            response_data["code"] = 404
+                            response_data["message"] = "User Not Found!"
+                            return response_data
+
+                    if priority_id not in search_param_values:
+                        priority = self.env['courier.priority.custom'].search(
+                            [
+                                ('id','=', int(priority_id))
+                            ]
+                        )                    
+                        
+                        if priority:
+                            courier_details["priority_id"] = priority.id
+                        else:
+                            response_data["code"] = 404
+                            response_data["message"] = "Priority Not Found!"
+                            return response_data                
+                    
+                    if category_id not in search_param_values:
+                        category = self.env['courier.category.custom'].search(
+                            [
+                                ('id','=', int(category_id))
+                            ]
+                        )                    
+                        
+                        if category:
+                            courier_details["category_id"] = category.id
+                        else:
+                            response_data["code"] = 404
+                            response_data["message"] = "Category Not Found!"
+                            return response_data                                          
+                    
+                    if receiver_partner_id not in search_param_values:
+                        receiver = self.env['res.partner'].search(
+                            [
+                                ('id','=', int(receiver_partner_id))
+                            ]
+                        )                    
+                        
+                        if receiver:
+                            # Receiver's details
+                            courier_details["receiver_name_id"] = receiver.id
+                            courier_details["receiver_mobile"] = receiver.phone
+                            courier_details["receiver_email"] = receiver.email
+                            courier_details["receiver_country_id"] = receiver.country_id.id
+                            courier_details["receiver_state_id"] = receiver.state_id.id
+                            courier_details["receiver_street"] = receiver.street                                                
+                        else:
+                            response_data["code"] = 404
+                            response_data["message"] = "Receiver Not Found!"
+                            return response_data                        
+                    
+                    if sender_partner_id not in search_param_values:
+                        sender = self.env['res.partner'].search(
+                            [
+                                ('id','=', int(sender_partner_id))
+                            ]
+                        )
+                    
+                        if sender:
+                            # Sender's details
+                            courier_details["sender_name_id"] = sender.id
+                            courier_details["sender_mobile"] = sender.phone
+                            courier_details["sender_email"] = sender.email
+                            courier_details["sender_country_id"] = sender.country_id.id
+                            courier_details["sender_state_id"] = sender.state_id.id
+                            courier_details["sender_street"] = sender.street
+                        else:
+                            response_data["code"] = 404
+                            response_data["message"] = "Sender Not Found!"
+                            return response_data
+                        
+                    if tag_ids not in search_param_values:
+                        tags = self.env['courier.tag.custom'].search(
+                            [
+                                ('id','in', tag_ids)
+                            ]
+                        )                   
+                        
+                        if tags:
+                            courier_details["tag_ids"] = [tag.id for tag in tags]
+                        else:
+                            response_data["code"] = 404
+                            response_data["message"] = "Tag Not Found!"
+                            return response_data
+                        
+                    if line_items not in search_param_values:                            
+                        for item in line_items:
+                            courier_items = dict()
+                            
+                            if item.get("product_id") not in search_param_values:
+                                courier_items["product_id"] = int(item.get("product_id"))
+                            if item.get("name") not in search_param_values:
+                                courier_items["name"] = item.get("name")
+                            if item.get("quantity") not in search_param_values:
+                                courier_items["qty"] = int(item.get("quantity"))
+                            if item.get("weight") not in search_param_values:
+                                courier_items["weight"] = float(item.get("weight"))
+                            if item.get("dimension_id") not in search_param_values:
+                                courier_items["box_id"] = int(item.get("dimension_id"))
+                            
+                            # Check if there are any values to be updated in the line items
+                            if courier_items:
+                                items_to_transport.append((1, int(item.get("id")), courier_items))
+                            
+                        if items_to_transport:
+                            courier_details["courier_line_ids"] = items_to_transport
+                        
+                    # Update courier details
+                    if courier_details:                        
+                        courier.write(courier_details)
+                        response_data["code"] = 200                
+                        response_data["message"] = "Courier updated successfully"
+                        return response_data
+                    else:
+                        response_data["code"] = 204                
+                        response_data["message"] = "Nothing to update"
+                        return response_data 
+                else:
+                    response_data["code"] = 404               
+                    response_data["message"] = "Courier Not Found!"
+                    return response_data                         
+            else:
+                response_data["code"] = 403               
+                response_data["message"] = f"{self.env.user.name}, You are not authorized to perform this action!"
+            
+            return response_data
+        except TypeError as e:
+            logger.error(f"Datatype error ocurred while modifying the courier details:\n\n{str(e)}")
+            raise e
+        except Exception as e:
+            logger.error(f"An error ocurred while modifying the courier details:\n\n{str(e)}")
+            raise e         

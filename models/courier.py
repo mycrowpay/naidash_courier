@@ -1,6 +1,6 @@
 import logging
-
-from datetime import datetime
+import pytz
+from datetime import datetime, date, timedelta
 from odoo import models, fields, api, _
 from odoo.http import request
 from odoo.exceptions import ValidationError, UserError
@@ -274,11 +274,7 @@ class NaidashCourier(models.Model):
                     vals["is_receiver_invoice"] = is_receiver_invoice                
                 
                 if assigned_user_id:
-                    user = self.env['res.users'].search(
-                        [
-                            ('id','=', int(assigned_user_id))
-                        ]
-                    )                    
+                    user = self.env['res.users'].browse(int(assigned_user_id))
                     
                     if user:
                         vals["user_id"] = user.id
@@ -288,11 +284,7 @@ class NaidashCourier(models.Model):
                         return response_data
 
                 if priority_id:
-                    priority = self.env['courier.priority.custom'].search(
-                        [
-                            ('id','=', int(priority_id))
-                        ]
-                    )                    
+                    priority = self.env['courier.priority.custom'].browse(int(priority_id))
                     
                     if priority:
                         vals["priority_id"] = priority.id
@@ -302,11 +294,7 @@ class NaidashCourier(models.Model):
                         return response_data                
                 
                 if category_id:
-                    category = self.env['courier.category.custom'].search(
-                        [
-                            ('id','=', int(category_id))
-                        ]
-                    )                    
+                    category = self.env['courier.category.custom'].browse(int(category_id))
                     
                     if category:
                         vals["category_id"] = category.id
@@ -316,11 +304,7 @@ class NaidashCourier(models.Model):
                         return response_data                                          
                 
                 if receiver_partner_id:
-                    receiver = self.env['res.partner'].search(
-                        [
-                            ('id','=', int(receiver_partner_id))
-                        ]
-                    )                    
+                    receiver = self.env['res.partner'].browse(int(receiver_partner_id))
                     
                     if receiver:
                         # Receiver's details
@@ -345,11 +329,7 @@ class NaidashCourier(models.Model):
                         return response_data                        
                 
                 if sender_partner_id:
-                    sender = self.env['res.partner'].search(
-                        [
-                            ('id','=', int(sender_partner_id))
-                        ]
-                    )
+                    sender = self.env['res.partner'].browse(int(sender_partner_id))
                 
                     if sender:
                         # Sender's details
@@ -365,17 +345,10 @@ class NaidashCourier(models.Model):
                         return response_data
                     
                 if tag_ids:
-                    tag_list = []
-                    tags = self.env['courier.tag.custom'].search(
-                        [
-                            ('id','in', tag_ids)
-                        ]
-                    )                   
+                    tags = self.env['courier.tag.custom'].browse(tag_ids)
                     
                     if tags:
-                        for tag in tags:
-                            tag_list.append(tag.id)
-                        vals["tag_ids"] = tag_list
+                        vals["tag_ids"] = [tag.id for tag in tags]
                     else:
                         response_data["code"] = 404
                         response_data["message"] = "Tag Not Found!"
@@ -433,13 +406,29 @@ class NaidashCourier(models.Model):
         
         try:
             response_data = dict()
+            courier_details = dict()                
             items_to_transport = []            
             search_param_values = ["", None, []]
             is_courier_manager = self.env.user.has_group('courier_manage.courier_management_manager_custom_group')
             
-            if is_courier_manager:
-                courier_details = dict()                
-                
+            is_record_active = request_data.get("is_record_active")
+            is_drop_shipping = request_data.get("is_drop_shipping")
+            is_receiver_invoice = request_data.get("is_receiver_invoice")
+            receiver_partner_id = request_data.get("receiver_partner_id")
+            stage_id = request_data.get("stage_id")
+            category_id = request_data.get("category_id")
+            priority_id = request_data.get("priority_id")
+            assigned_user_id = request_data.get("assigned_user_id")
+            delivery_date = request_data.get("delivery_date")
+            courier_type = request_data.get("courier_type")    
+            tag_ids = request_data.get("tag_ids")
+            distance = request_data.get("distance")
+            description = request_data.get("description")
+            internal_note = request_data.get("internal_note")
+            sender_partner_id = request_data.get("sender_partner_id")
+            line_items = request_data.get("line_items")
+            
+            if is_courier_manager:                
                 courier = self.env['courier.custom'].search(
                     [
                         ('id','=', int(courier_id)), '|', 
@@ -448,22 +437,6 @@ class NaidashCourier(models.Model):
                 )
                 
                 if courier:
-                    is_drop_shipping = request_data.get("is_drop_shipping")
-                    is_receiver_invoice = request_data.get("is_receiver_invoice")
-                    receiver_partner_id = request_data.get("receiver_partner_id")
-                    stage_id = request_data.get("stage_id")
-                    category_id = request_data.get("category_id")
-                    priority_id = request_data.get("priority_id")
-                    assigned_user_id = request_data.get("assigned_user_id")
-                    delivery_date = request_data.get("delivery_date")
-                    courier_type = request_data.get("courier_type")    
-                    tag_ids = request_data.get("tag_ids")
-                    distance = request_data.get("distance")
-                    description = request_data.get("description")
-                    internal_note = request_data.get("internal_note")
-                    sender_partner_id = request_data.get("sender_partner_id")
-                    line_items = request_data.get("line_items")
-                    
                     if is_drop_shipping == True and sender_partner_id in search_param_values:
                         response_data["code"] = 400
                         response_data["message"] = "Bad Request! Missing sender's partner id"
@@ -478,7 +451,10 @@ class NaidashCourier(models.Model):
                         response_data["code"] = 400
                         response_data["message"] = "Bad Request! Remove the sender's details"
                         return response_data
-                        
+                    
+                    if is_record_active not in search_param_values:
+                        courier_details["active"] = is_record_active                        
+                    
                     if distance not in search_param_values:
                         courier_details["distance"] = float(distance)
                         
@@ -516,12 +492,7 @@ class NaidashCourier(models.Model):
                             return response_data                    
                     
                     if assigned_user_id not in search_param_values:
-                        user = self.env['res.users'].search(
-                            [
-                                ('id','=', int(assigned_user_id))
-                            ]
-                        )                    
-                        
+                        user = self.env['res.users'].browse(int(assigned_user_id))                        
                         if user:
                             courier_details["user_id"] = user.id
                         else:
@@ -530,12 +501,7 @@ class NaidashCourier(models.Model):
                             return response_data
 
                     if priority_id not in search_param_values:
-                        priority = self.env['courier.priority.custom'].search(
-                            [
-                                ('id','=', int(priority_id))
-                            ]
-                        )                    
-                        
+                        priority = self.env['courier.priority.custom'].browse(int(priority_id))                        
                         if priority:
                             courier_details["priority_id"] = priority.id
                         else:
@@ -544,12 +510,7 @@ class NaidashCourier(models.Model):
                             return response_data                
                     
                     if category_id not in search_param_values:
-                        category = self.env['courier.category.custom'].search(
-                            [
-                                ('id','=', int(category_id))
-                            ]
-                        )                    
-                        
+                        category = self.env['courier.category.custom'].browse(int(category_id))                        
                         if category:
                             courier_details["category_id"] = category.id
                         else:
@@ -558,12 +519,7 @@ class NaidashCourier(models.Model):
                             return response_data                                          
                     
                     if receiver_partner_id not in search_param_values:
-                        receiver = self.env['res.partner'].search(
-                            [
-                                ('id','=', int(receiver_partner_id))
-                            ]
-                        )                    
-                        
+                        receiver = self.env['res.partner'].browse(int(receiver_partner_id))                        
                         if receiver:
                             # Receiver's details
                             courier_details["receiver_name_id"] = receiver.id
@@ -578,12 +534,7 @@ class NaidashCourier(models.Model):
                             return response_data                        
                     
                     if sender_partner_id not in search_param_values:
-                        sender = self.env['res.partner'].search(
-                            [
-                                ('id','=', int(sender_partner_id))
-                            ]
-                        )
-                    
+                        sender = self.env['res.partner'].browse(int(sender_partner_id))                    
                         if sender:
                             # Sender's details
                             courier_details["sender_name_id"] = sender.id
@@ -598,12 +549,7 @@ class NaidashCourier(models.Model):
                             return response_data
                         
                     if tag_ids not in search_param_values:
-                        tags = self.env['courier.tag.custom'].search(
-                            [
-                                ('id','in', tag_ids)
-                            ]
-                        )                   
-                        
+                        tags = self.env['courier.tag.custom'].browse(tag_ids)                        
                         if tags:
                             courier_details["tag_ids"] = [tag.id for tag in tags]
                         else:
@@ -648,8 +594,38 @@ class NaidashCourier(models.Model):
                     response_data["message"] = "Courier Not Found!"
                     return response_data                         
             else:
-                response_data["code"] = 403               
-                response_data["message"] = f"{self.env.user.name}, You are not authorized to perform this action!"
+                logged_in_user = self.env.user
+                # Other users will access active courier requests only
+                active_courier = self.env['courier.custom'].search(
+                    [
+                        ('id', '=', int(courier_id)),
+                        ('user_id', '=', logged_in_user.id)
+                    ]
+                )
+                
+                if active_courier:
+                    if stage_id not in search_param_values:
+                        stage = self.env['courier.stage.custom'].browse(int(stage_id))                        
+                        if stage:
+                            courier_details["stage_id"] = stage.id
+                        else:
+                            response_data["code"] = 404
+                            response_data["message"] = "Stage Not Found!"
+                            return response_data
+                        
+                    # Update courier details
+                    if courier_details:
+                        active_courier.write(courier_details)
+                        response_data["code"] = 200                
+                        response_data["message"] = "Courier updated successfully"
+                        return response_data
+                    else:
+                        response_data["code"] = 204                
+                        response_data["message"] = "Nothing to update"
+                        return response_data
+                else:
+                    response_data["code"] = 404
+                    response_data["message"] = "Courier Not Found!"
             
             return response_data
         except TypeError as e:
@@ -657,4 +633,202 @@ class NaidashCourier(models.Model):
             raise e
         except Exception as e:
             logger.error(f"An error ocurred while modifying the courier details:\n\n{str(e)}")
-            raise e         
+            raise e
+        
+    def get_a_courier_request(self, courier_id):
+        """Get the courier details
+        """        
+        
+        try:
+            data = dict()            
+            response_data = dict()
+            is_courier_manager = self.env.user.has_group('courier_manage.courier_management_manager_custom_group')
+            
+            # Courier Admins/Managers can search for 
+            # any courier request regardless of the active status
+            if is_courier_manager:
+                courier = self.env['courier.custom'].search(
+                    [
+                        ('id','=', int(courier_id)), '|', 
+                        ('active','=', True), ('active','=', False)
+                    ]
+                )
+                
+                if courier:
+                    data["id"] = courier.id
+                    data["name"] = courier.name
+                    data["is_record_active"] = courier.active
+                    data["is_receiver_invoice"] = courier.is_receiver_invoice
+                    data["is_drop_shipping"] = courier.is_drop_shipping
+                    data["courier_type"] = courier.courier_type
+                    data["distance"] = courier.distance
+                    data["is_readonly"] = courier.is_readonly
+                    data["is_saleorder"] = courier.is_saleorder
+                    data["courier_charges"] = courier.total_courier_charges
+                    data["distance_charges"] = courier.distance_charges
+                    data["additional_charges"] = courier.additional_charges
+                    data["total_charges"] = courier.total
+                    data["description"] = courier.description
+                    data["internal_note"] = courier.internal_note
+                    
+                    # Display the delivery time using the assigned user's local timezone
+                    assigned_user_timezone = courier.user_id.tz or pytz.utc
+                    assigned_user_timezone = pytz.timezone(assigned_user_timezone)
+                    delivery_date = (courier.delivery_date).strftime("%Y-%m-%d %H:%M")
+                    delivery_date = datetime.strftime(
+                        pytz.utc.localize(datetime.strptime(delivery_date, "%Y-%m-%d %H:%M")).astimezone(assigned_user_timezone),
+                        "%Y-%m-%d %H:%M"
+                    )
+                    
+                    data["delivery_date"] = delivery_date
+                    data["stage"] = {"id": courier.stage_id.id, "name": courier.stage_id.name} if courier.stage_id else {}
+                    data["assigned_user"] = {"id": courier.user_id.id, "name": courier.user_id.name} if courier.user_id else {}
+                    data["priority"] = {"id": courier.priority_id.id, "name": courier.priority_id.name} if courier.priority_id else {}
+                    data["category_id"] = {"id": courier.category_id.id, "name": courier.category_id.name} if courier.category_id else {}
+                    data["tag_ids"] = [{"id": tag.id, "name": tag.name} for tag in courier.tag_ids] if courier.tag_ids else []                    
+                    data["distance_product"] = {"id": courier.distance_product_id.id, "name": courier.distance_product_id.name} if courier.distance_product_id else {}
+                    data["additional_product"] = {"id": courier.additional_product_id.id, "name": courier.additional_product_id.name} if courier.additional_product_id else {}
+                    data["sales_order"] = {"id": courier.sale_order_id.id, "name": courier.sale_order_id.name} if courier.sale_order_id else {}
+                    data["currency"] = {"id": courier.currency_id.id, "name": courier.currency_id.name} if courier.currency_id else {}
+                    data["company"] = {"id": courier.company_id.id, "name": courier.company_id.name} if courier.company_id else {}                    
+                                        
+                    data["receiver"] = {
+                        "id": courier.receiver_name_id.id, 
+                        "name": courier.receiver_name_id.name,
+                        "phone": courier.receiver_mobile,
+                        "email": courier.receiver_email,
+                        "country": {"id": courier.receiver_country_id.id, "name": courier.receiver_country_id.name} if courier.receiver_country_id else {},
+                        "state": {"id": courier.receiver_state_id.id, "name": courier.receiver_state_id.name} if courier.receiver_state_id else {},
+                        "address": courier.receiver_street
+                    } if courier.receiver_name_id else {}
+                    
+                    data["sender"] = {
+                        "id": courier.sender_name_id.id, 
+                        "name": courier.sender_name_id.name,
+                        "phone": courier.sender_mobile,
+                        "email": courier.sender_email,
+                        "country": {"id": courier.sender_country_id.id, "name": courier.sender_country_id.name} if courier.sender_country_id else {},
+                        "state": {"id": courier.sender_state_id.id, "name": courier.sender_state_id.name} if courier.sender_state_id else {},
+                        "address": courier.sender_street                        
+                    } if courier.sender_name_id else {}
+
+                    data["line_items"] = [
+                        {
+                            "id": item.id, 
+                            "name": item.name,
+                            "quantity": item.qty,
+                            "weight": item.weight,
+                            "total_weight": item.total_weight,
+                            "weight_cost": item.weight_cost,
+                            "volumetric_weight": item.volumetric_weight,
+                            "total_volumetric_weight": item.total_volumetric_weight,
+                            "volumetric_weight_cost": item.volumetric_weight_cost,
+                            "subtotal": item.courier_subtotal,
+                            "dimension": {"id": item.box_id.id, "name": item.box_id.name} if item.box_id else {},
+                            "product": {"id": item.product_id.id, "name": item.product_id.name} if item.product_id else {}
+                        } for item in courier.courier_line_ids
+                    ] if courier.courier_line_ids else []
+                    
+                    response_data["code"] = 200
+                    response_data["message"] = "Success"
+                    response_data["data"] = data
+                else:
+                    response_data["code"] = 404
+                    response_data["message"] = "Courier Not Found!"
+            else:
+                logged_in_user = self.env.user.id
+                # Other users will access active courier 
+                # requests assigned to them
+                active_courier = self.env['courier.custom'].search(
+                    [
+                        ('id', '=', int(courier_id)),
+                        ('user_id', '=', logged_in_user)
+                    ]
+                )
+                
+                if active_courier:
+                    data["id"] = active_courier.id
+                    data["name"] = active_courier.name
+                    data["is_record_active"] = active_courier.active                    
+                    data["is_receiver_invoice"] = active_courier.is_receiver_invoice
+                    data["is_drop_shipping"] = active_courier.is_drop_shipping
+                    data["courier_type"] = active_courier.courier_type
+                    data["distance"] = active_courier.distance
+                    data["is_readonly"] = active_courier.is_readonly
+                    data["is_saleorder"] = active_courier.is_saleorder
+                    data["courier_charges"] = active_courier.total_courier_charges
+                    data["distance_charges"] = active_courier.distance_charges
+                    data["additional_charges"] = active_courier.additional_charges
+                    data["total_charges"] = active_courier.total
+                    data["description"] = active_courier.description
+                    data["internal_note"] = active_courier.internal_note
+                    
+                    # Display the delivery time using the assigned user's local timezone
+                    assigned_user_timezone = active_courier.user_id.tz or pytz.utc
+                    assigned_user_timezone = pytz.timezone(assigned_user_timezone)
+                    delivery_date = (active_courier.delivery_date).strftime("%Y-%m-%d %H:%M")
+                    delivery_date = datetime.strftime(
+                        pytz.utc.localize(datetime.strptime(delivery_date, "%Y-%m-%d %H:%M")).astimezone(assigned_user_timezone),
+                        "%Y-%m-%d %H:%M"
+                    )
+                    
+                    data["delivery_date"] = delivery_date
+                    data["stage"] = {"id": active_courier.stage_id.id, "name": active_courier.stage_id.name} if active_courier.stage_id else {}
+                    data["assigned_user"] = {"id": active_courier.user_id.id, "name": active_courier.user_id.name} if active_courier.user_id else {}
+                    data["priority"] = {"id": active_courier.priority_id.id, "name": active_courier.priority_id.name} if active_courier.priority_id else {}
+                    data["category_id"] = {"id": active_courier.category_id.id, "name": active_courier.category_id.name} if active_courier.category_id else {}
+                    data["tag_ids"] = [{"id": tag.id, "name": tag.name} for tag in active_courier.tag_ids] if active_courier.tag_ids else []                    
+                    data["distance_product"] = {"id": active_courier.distance_product_id.id, "name": active_courier.distance_product_id.name} if active_courier.distance_product_id else {}
+                    data["additional_product"] = {"id": active_courier.additional_product_id.id, "name": active_courier.additional_product_id.name} if active_courier.additional_product_id else {}
+                    data["sales_order"] = {"id": active_courier.sale_order_id.id, "name": active_courier.sale_order_id.name} if active_courier.sale_order_id else {}
+                    data["currency"] = {"id": active_courier.currency_id.id, "name": active_courier.currency_id.name} if active_courier.currency_id else {}
+                    data["company"] = {"id": active_courier.company_id.id, "name": active_courier.company_id.name} if active_courier.company_id else {}                    
+                                        
+                    data["receiver"] = {
+                        "id": active_courier.receiver_name_id.id, 
+                        "name": active_courier.receiver_name_id.name,
+                        "phone": active_courier.receiver_mobile,
+                        "email": active_courier.receiver_email,
+                        "country": {"id": active_courier.receiver_country_id.id, "name": active_courier.receiver_country_id.name} if active_courier.receiver_country_id else {},
+                        "state": {"id": active_courier.receiver_state_id.id, "name": active_courier.receiver_state_id.name} if active_courier.receiver_state_id else {},
+                        "address": active_courier.receiver_street
+                    } if active_courier.receiver_name_id else {}
+                    
+                    data["sender"] = {
+                        "id": active_courier.sender_name_id.id, 
+                        "name": active_courier.sender_name_id.name,
+                        "phone": active_courier.sender_mobile,
+                        "email": active_courier.sender_email,
+                        "country": {"id": active_courier.sender_country_id.id, "name": active_courier.sender_country_id.name} if active_courier.sender_country_id else {},
+                        "state": {"id": active_courier.sender_state_id.id, "name": active_courier.sender_state_id.name} if active_courier.sender_state_id else {},
+                        "address": active_courier.sender_street                        
+                    } if active_courier.sender_name_id else {}
+
+                    data["line_items"] = [
+                        {
+                            "id": item.id, 
+                            "name": item.name,
+                            "quantity": item.qty,
+                            "weight": item.weight,
+                            "total_weight": item.total_weight,
+                            "weight_cost": item.weight_cost,
+                            "volumetric_weight": item.volumetric_weight,
+                            "total_volumetric_weight": item.total_volumetric_weight,
+                            "volumetric_weight_cost": item.volumetric_weight_cost,
+                            "subtotal": item.courier_subtotal,
+                            "dimension": {"id": item.box_id.id, "name": item.box_id.name} if item.box_id else {},
+                            "product": {"id": item.product_id.id, "name": item.product_id.name} if item.product_id else {}
+                        } for item in active_courier.courier_line_ids
+                    ] if active_courier.courier_line_ids else []                 
+                    
+                    response_data["code"] = 200
+                    response_data["message"] = "Success"
+                    response_data["data"] = data
+                else:
+                    response_data["code"] = 404
+                    response_data["message"] = "Courier Not Found!"
+            
+            return response_data
+        except Exception as e:
+            logger.error(f"The following error ocurred while fetching the courier details:\n\n{str(e)}")
+            raise e        

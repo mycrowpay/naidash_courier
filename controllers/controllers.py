@@ -196,4 +196,43 @@ class NaidashCourier(http.Controller):
             return {            
                 "code": 500,
                 "message": str(e)
-            }            
+            }
+            
+    @route('/api/v1/naidash/courier/<int:courier_id>', methods=['GET'], auth='user', type='http')
+    def get_courier(self, courier_id):
+        """Get the courier details
+        """ 
+                
+        headers = [('Content-Type', 'application/json')]
+                
+        try:
+            courier_details = request.env['courier.custom'].get_a_courier_request(courier_id)
+            status_code = courier_details.get("code")
+            
+            if status_code == 404:
+                data = json.dumps(
+                    {
+                        "error": courier_details
+                    }
+                )
+
+                return request.make_response(data, headers, status=status_code)                 
+            else:
+                data = json.dumps(
+                    {
+                        "result": courier_details
+                    }
+                )
+
+                return request.make_response(data, headers, status=status_code)
+        except Exception as e:
+            logger.exception(f"The following error occurred while fetching the courier details:\n\n{str(e)}")
+            data = json.dumps(
+                {
+                    "error": {
+                        "code": 500,
+                        "message": str(e)}
+                }
+            )
+            
+            return request.make_response(data, headers, status=500)

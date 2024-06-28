@@ -167,6 +167,18 @@ class NaidashCourier(models.Model):
             self.receiver_country_id = self.receiver_name_id.country_id
             self.receiver_mobile = self.receiver_name_id.phone
             self.receiver_email = self.receiver_name_id.email
+            
+    @api.depends('distance')
+    def _compute_distance_charges(self):
+        for rec in self:
+            line = rec.env['distance.price.custom'].search([('min_value','<=',rec.distance), ('max_value','>=',rec.distance)], limit=1)
+            rec.distance_product_id = line.product_id
+            rec.distance_charges = line.cost
+
+    @api.depends('priority_id.charges', 'total_courier_charges', 'distance_charges')
+    def _compute_additional_charges(self):
+        for rec in self:            
+            rec.additional_charges = ((rec.total_courier_charges + rec.distance_charges) / 100) * rec.priority_id.charges            
     
     def create_courier_request(self, request_data):
         """Create Courier Request
@@ -670,17 +682,19 @@ class NaidashCourier(models.Model):
                     data["total_charges"] = courier.total
                     data["description"] = courier.description
                     data["internal_note"] = courier.internal_note
+                    data["delivery_date"] = ""
                     
                     # Display the delivery time using the assigned user's local timezone
-                    assigned_user_timezone = courier.user_id.tz or pytz.utc
-                    assigned_user_timezone = pytz.timezone(assigned_user_timezone)
-                    delivery_date = (courier.delivery_date).strftime("%Y-%m-%d %H:%M")
-                    delivery_date = datetime.strftime(
-                        pytz.utc.localize(datetime.strptime(delivery_date, "%Y-%m-%d %H:%M")).astimezone(assigned_user_timezone),
-                        "%Y-%m-%d %H:%M"
-                    )
-                    
-                    data["delivery_date"] = delivery_date
+                    if courier.delivery_date:
+                        assigned_user_timezone = courier.user_id.tz or pytz.utc
+                        assigned_user_timezone = pytz.timezone(assigned_user_timezone)
+                        delivery_date = (courier.delivery_date).strftime("%Y-%m-%d %H:%M")
+                        delivery_date = datetime.strftime(
+                            pytz.utc.localize(datetime.strptime(delivery_date, "%Y-%m-%d %H:%M")).astimezone(assigned_user_timezone),
+                            "%Y-%m-%d %H:%M"
+                        )
+                        
+                        data["delivery_date"] = delivery_date
                     data["stage"] = {"id": courier.stage_id.id, "name": courier.stage_id.name} if courier.stage_id else {}
                     data["assigned_user"] = {"id": courier.user_id.id, "name": courier.user_id.name} if courier.user_id else {}
                     data["priority"] = {"id": courier.priority_id.id, "name": courier.priority_id.name} if courier.priority_id else {}
@@ -762,17 +776,19 @@ class NaidashCourier(models.Model):
                     data["total_charges"] = active_courier.total
                     data["description"] = active_courier.description
                     data["internal_note"] = active_courier.internal_note
+                    data["delivery_date"] = ""
                     
                     # Display the delivery time using the assigned user's local timezone
-                    assigned_user_timezone = active_courier.user_id.tz or pytz.utc
-                    assigned_user_timezone = pytz.timezone(assigned_user_timezone)
-                    delivery_date = (active_courier.delivery_date).strftime("%Y-%m-%d %H:%M")
-                    delivery_date = datetime.strftime(
-                        pytz.utc.localize(datetime.strptime(delivery_date, "%Y-%m-%d %H:%M")).astimezone(assigned_user_timezone),
-                        "%Y-%m-%d %H:%M"
-                    )
-                    
-                    data["delivery_date"] = delivery_date
+                    if active_courier.delivery_date:
+                        assigned_user_timezone = active_courier.user_id.tz or pytz.utc
+                        assigned_user_timezone = pytz.timezone(assigned_user_timezone)
+                        delivery_date = (active_courier.delivery_date).strftime("%Y-%m-%d %H:%M")
+                        delivery_date = datetime.strftime(
+                            pytz.utc.localize(datetime.strptime(delivery_date, "%Y-%m-%d %H:%M")).astimezone(assigned_user_timezone),
+                            "%Y-%m-%d %H:%M"
+                        )
+                        
+                        data["delivery_date"] = delivery_date
                     data["stage"] = {"id": active_courier.stage_id.id, "name": active_courier.stage_id.name} if active_courier.stage_id else {}
                     data["assigned_user"] = {"id": active_courier.user_id.id, "name": active_courier.user_id.name} if active_courier.user_id else {}
                     data["priority"] = {"id": active_courier.priority_id.id, "name": active_courier.priority_id.name} if active_courier.priority_id else {}
@@ -824,6 +840,258 @@ class NaidashCourier(models.Model):
                     response_data["code"] = 200
                     response_data["message"] = "Success"
                     response_data["data"] = data
+                else:
+                    response_data["code"] = 404
+                    response_data["message"] = "Courier Not Found!"
+            
+            return response_data
+        except Exception as e:
+            logger.error(f"The following error ocurred while fetching the courier details:\n\n{str(e)}")
+            raise e
+        
+    def get_all_courier_requests(self, request_data):
+        """Get all the courier requests
+        """        
+        
+        try:
+            response_data = dict()
+            query_params = list()
+            all_courier_requests = []
+            is_courier_manager = self.env.user.has_group('courier_manage.courier_management_manager_custom_group')
+            
+            if request_data.get("phone"):
+                query_params = [
+                    '|',
+                    ('sender_mobile','=', request_data.get("phone")),
+                    ('receiver_mobile','=', request_data.get("phone")),
+                ]
+                
+            if request_data.get("delivery_date"):
+                delivery_date = request_data.get("delivery_date")
+                query_params = [
+                    ('delivery_date','<=',(datetime(delivery_date.year, delivery_date.month, delivery_date.day)).strftime('%Y-%m-%d 23:59:59')),
+                    ('delivery_date','>=',(datetime(delivery_date.year, delivery_date.month, delivery_date.day)).strftime('%Y-%m-%d 00:00:00'))
+                ] 
+                
+            if request_data.get("stage_id"):
+                query_params = [
+                    ('stage_id','=', request_data.get("stage_id"))
+                ] 
+                
+            if request_data.get("priority_id"):
+                query_params = [
+                    ('priority_id','=', request_data.get("priority_id"))
+                ]
+                 
+            if request_data.get("category_id"):
+                query_params = [
+                    ('category_id','=', request_data.get("category_id"))
+                ]
+                                
+            if request_data.get("courier_type"):
+                query_params = [
+                    ('courier_type','=', request_data.get("courier_type"))
+                ]
+            
+            if request_data.get("is_drop_shipping") == True or request_data.get("is_drop_shipping") == False:
+                query_params = [
+                    ('is_drop_shipping','=', request_data.get("is_drop_shipping"))
+                ]
+                                                                                                                                                            
+            # Courier Admins/Managers can search
+            # for any courier request
+            if is_courier_manager:
+                if request_data.get("assigned_user_id"):
+                    query_params = [
+                        ('user_id','=', request_data.get("assigned_user_id"))
+                    ]
+                    
+                if request_data.get("is_record_active") == True or request_data.get("is_record_active") == False:
+                    query_params = [
+                        ('active','=', request_data.get("is_record_active"))
+                    ]
+                                                   
+                couriers = self.env['courier.custom'].search(query_params, order='id desc')
+                
+                if couriers:
+                    for courier in couriers:
+                        data = dict()                    
+                        data["id"] = courier.id
+                        data["name"] = courier.name
+                        data["is_record_active"] = courier.active
+                        data["is_receiver_invoice"] = courier.is_receiver_invoice
+                        data["is_drop_shipping"] = courier.is_drop_shipping
+                        data["courier_type"] = courier.courier_type
+                        data["distance"] = courier.distance
+                        data["is_readonly"] = courier.is_readonly
+                        data["is_saleorder"] = courier.is_saleorder
+                        data["courier_charges"] = courier.total_courier_charges
+                        data["distance_charges"] = courier.distance_charges
+                        data["additional_charges"] = courier.additional_charges
+                        data["total_charges"] = courier.total
+                        data["description"] = courier.description
+                        data["internal_note"] = courier.internal_note
+                        data["delivery_date"] = ""
+                        
+                        # Display the delivery time using the assigned user's local timezone
+                        if courier.delivery_date:
+                            assigned_user_timezone = courier.user_id.tz or pytz.utc
+                            assigned_user_timezone = pytz.timezone(assigned_user_timezone)
+                            delivery_date = (courier.delivery_date).strftime("%Y-%m-%d %H:%M")
+                            delivery_date = datetime.strftime(
+                                pytz.utc.localize(datetime.strptime(delivery_date, "%Y-%m-%d %H:%M")).astimezone(assigned_user_timezone),
+                                "%Y-%m-%d %H:%M"
+                            )
+                            
+                            data["delivery_date"] = delivery_date
+                            
+                        data["stage"] = {"id": courier.stage_id.id, "name": courier.stage_id.name} if courier.stage_id else {}
+                        data["assigned_user"] = {"id": courier.user_id.id, "name": courier.user_id.name} if courier.user_id else {}
+                        data["priority"] = {"id": courier.priority_id.id, "name": courier.priority_id.name} if courier.priority_id else {}
+                        data["category_id"] = {"id": courier.category_id.id, "name": courier.category_id.name} if courier.category_id else {}
+                        data["tag_ids"] = [{"id": tag.id, "name": tag.name} for tag in courier.tag_ids] if courier.tag_ids else []                    
+                        data["distance_product"] = {"id": courier.distance_product_id.id, "name": courier.distance_product_id.name} if courier.distance_product_id else {}
+                        data["additional_product"] = {"id": courier.additional_product_id.id, "name": courier.additional_product_id.name} if courier.additional_product_id else {}
+                        data["sales_order"] = {"id": courier.sale_order_id.id, "name": courier.sale_order_id.name} if courier.sale_order_id else {}
+                        data["currency"] = {"id": courier.currency_id.id, "name": courier.currency_id.name} if courier.currency_id else {}
+                        data["company"] = {"id": courier.company_id.id, "name": courier.company_id.name} if courier.company_id else {}                    
+                                            
+                        data["receiver"] = {
+                            "id": courier.receiver_name_id.id, 
+                            "name": courier.receiver_name_id.name,
+                            "phone": courier.receiver_mobile,
+                            "email": courier.receiver_email,
+                            "country": {"id": courier.receiver_country_id.id, "name": courier.receiver_country_id.name} if courier.receiver_country_id else {},
+                            "state": {"id": courier.receiver_state_id.id, "name": courier.receiver_state_id.name} if courier.receiver_state_id else {},
+                            "address": courier.receiver_street
+                        } if courier.receiver_name_id else {}
+                        
+                        data["sender"] = {
+                            "id": courier.sender_name_id.id, 
+                            "name": courier.sender_name_id.name,
+                            "phone": courier.sender_mobile,
+                            "email": courier.sender_email,
+                            "country": {"id": courier.sender_country_id.id, "name": courier.sender_country_id.name} if courier.sender_country_id else {},
+                            "state": {"id": courier.sender_state_id.id, "name": courier.sender_state_id.name} if courier.sender_state_id else {},
+                            "address": courier.sender_street                        
+                        } if courier.sender_name_id else {}
+
+                        data["line_items"] = [
+                            {
+                                "id": item.id, 
+                                "name": item.name,
+                                "quantity": item.qty,
+                                "weight": item.weight,
+                                "total_weight": item.total_weight,
+                                "weight_cost": item.weight_cost,
+                                "volumetric_weight": item.volumetric_weight,
+                                "total_volumetric_weight": item.total_volumetric_weight,
+                                "volumetric_weight_cost": item.volumetric_weight_cost,
+                                "subtotal": item.courier_subtotal,
+                                "dimension": {"id": item.box_id.id, "name": item.box_id.name} if item.box_id else {},
+                                "product": {"id": item.product_id.id, "name": item.product_id.name} if item.product_id else {}
+                            } for item in courier.courier_line_ids
+                        ] if courier.courier_line_ids else []
+                        
+                        all_courier_requests.append(data)
+                    
+                    response_data["code"] = 200
+                    response_data["message"] = "Success"
+                    response_data["data"] = all_courier_requests
+                else:
+                    response_data["code"] = 404
+                    response_data["message"] = "Courier Not Found!"
+            else: 
+                logged_in_user = self.env.user.id
+                query_params.append(('user_id','=', logged_in_user))
+                # Other users will access active courier 
+                # requests assigned to them
+                active_couriers = self.env['courier.custom'].search(query_params, order='id asc')
+                
+                if active_couriers:
+                    for active_courier in active_couriers:
+                        data = dict()
+                        data["id"] = active_courier.id
+                        data["name"] = active_courier.name
+                        data["is_record_active"] = active_courier.active                    
+                        data["is_receiver_invoice"] = active_courier.is_receiver_invoice
+                        data["is_drop_shipping"] = active_courier.is_drop_shipping
+                        data["courier_type"] = active_courier.courier_type
+                        data["distance"] = active_courier.distance
+                        data["is_readonly"] = active_courier.is_readonly
+                        data["is_saleorder"] = active_courier.is_saleorder
+                        data["courier_charges"] = active_courier.total_courier_charges
+                        data["distance_charges"] = active_courier.distance_charges
+                        data["additional_charges"] = active_courier.additional_charges
+                        data["total_charges"] = active_courier.total
+                        data["description"] = active_courier.description
+                        data["internal_note"] = active_courier.internal_note                        
+                        data["delivery_date"] = ""
+                        
+                        # Display the delivery time using the assigned user's local timezone
+                        if active_courier.delivery_date:
+                            assigned_user_timezone = active_courier.user_id.tz or pytz.utc
+                            assigned_user_timezone = pytz.timezone(assigned_user_timezone)
+                            delivery_date = (active_courier.delivery_date).strftime("%Y-%m-%d %H:%M")
+                            delivery_date = datetime.strftime(
+                                pytz.utc.localize(datetime.strptime(delivery_date, "%Y-%m-%d %H:%M")).astimezone(assigned_user_timezone),
+                                "%Y-%m-%d %H:%M"
+                            )
+                            
+                            data["delivery_date"] = delivery_date
+                        data["stage"] = {"id": active_courier.stage_id.id, "name": active_courier.stage_id.name} if active_courier.stage_id else {}
+                        data["assigned_user"] = {"id": active_courier.user_id.id, "name": active_courier.user_id.name} if active_courier.user_id else {}
+                        data["priority"] = {"id": active_courier.priority_id.id, "name": active_courier.priority_id.name} if active_courier.priority_id else {}
+                        data["category_id"] = {"id": active_courier.category_id.id, "name": active_courier.category_id.name} if active_courier.category_id else {}
+                        data["tag_ids"] = [{"id": tag.id, "name": tag.name} for tag in active_courier.tag_ids] if active_courier.tag_ids else []                    
+                        data["distance_product"] = {"id": active_courier.distance_product_id.id, "name": active_courier.distance_product_id.name} if active_courier.distance_product_id else {}
+                        data["additional_product"] = {"id": active_courier.additional_product_id.id, "name": active_courier.additional_product_id.name} if active_courier.additional_product_id else {}
+                        data["sales_order"] = {"id": active_courier.sale_order_id.id, "name": active_courier.sale_order_id.name} if active_courier.sale_order_id else {}
+                        data["currency"] = {"id": active_courier.currency_id.id, "name": active_courier.currency_id.name} if active_courier.currency_id else {}
+                        data["company"] = {"id": active_courier.company_id.id, "name": active_courier.company_id.name} if active_courier.company_id else {}                    
+                                            
+                        data["receiver"] = {
+                            "id": active_courier.receiver_name_id.id, 
+                            "name": active_courier.receiver_name_id.name,
+                            "phone": active_courier.receiver_mobile,
+                            "email": active_courier.receiver_email,
+                            "country": {"id": active_courier.receiver_country_id.id, "name": active_courier.receiver_country_id.name} if active_courier.receiver_country_id else {},
+                            "state": {"id": active_courier.receiver_state_id.id, "name": active_courier.receiver_state_id.name} if active_courier.receiver_state_id else {},
+                            "address": active_courier.receiver_street
+                        } if active_courier.receiver_name_id else {}
+                        
+                        data["sender"] = {
+                            "id": active_courier.sender_name_id.id, 
+                            "name": active_courier.sender_name_id.name,
+                            "phone": active_courier.sender_mobile,
+                            "email": active_courier.sender_email,
+                            "country": {"id": active_courier.sender_country_id.id, "name": active_courier.sender_country_id.name} if active_courier.sender_country_id else {},
+                            "state": {"id": active_courier.sender_state_id.id, "name": active_courier.sender_state_id.name} if active_courier.sender_state_id else {},
+                            "address": active_courier.sender_street                        
+                        } if active_courier.sender_name_id else {}
+
+                        data["line_items"] = [
+                            {
+                                "id": item.id, 
+                                "name": item.name,
+                                "quantity": item.qty,
+                                "weight": item.weight,
+                                "total_weight": item.total_weight,
+                                "weight_cost": item.weight_cost,
+                                "volumetric_weight": item.volumetric_weight,
+                                "total_volumetric_weight": item.total_volumetric_weight,
+                                "volumetric_weight_cost": item.volumetric_weight_cost,
+                                "subtotal": item.courier_subtotal,
+                                "dimension": {"id": item.box_id.id, "name": item.box_id.name} if item.box_id else {},
+                                "product": {"id": item.product_id.id, "name": item.product_id.name} if item.product_id else {}
+                            } for item in active_courier.courier_line_ids
+                        ] if active_courier.courier_line_ids else []
+                                            
+                        all_courier_requests.append(data)
+                        
+                    response_data["code"] = 200
+                    response_data["message"] = "Success"
+                    response_data["data"] = all_courier_requests
                 else:
                     response_data["code"] = 404
                     response_data["message"] = "Courier Not Found!"

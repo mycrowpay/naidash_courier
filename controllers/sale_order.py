@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 
 class NaidashSaleOrder(http.Controller):
     @route('/api/v1/naidash/sale', methods=['POST'], auth='user', type='json')
-    def create_courier(self, **kw):
+    def create_sale_order(self, **kw):
         """Create the sale order
         """ 
                         
@@ -30,3 +30,42 @@ class NaidashSaleOrder(http.Controller):
                 "code": 500,
                 "message": str(e)
             }
+            
+    @route('/api/v1/naidash/sale/<int:sale_id>', methods=['GET'], auth='user', type='http')
+    def get_sale_order(self, sale_id):
+        """Get the sale order details
+        """ 
+                
+        headers = [('Content-Type', 'application/json')]
+                
+        try:
+            sale_order_details = request.env['sale.order'].get_a_sale_order(sale_id)
+            status_code = sale_order_details.get("code")
+            
+            if status_code == 404:
+                data = json.dumps(
+                    {
+                        "error": sale_order_details
+                    }
+                )
+
+                return request.make_response(data, headers, status=status_code)                 
+            else:
+                data = json.dumps(
+                    {
+                        "result": sale_order_details
+                    }
+                )
+
+                return request.make_response(data, headers, status=status_code)
+        except Exception as e:
+            logger.exception(f"The following error occurred while fetching the sale order details:\n\n{str(e)}")
+            data = json.dumps(
+                {
+                    "error": {
+                        "code": 500,
+                        "message": str(e)}
+                }
+            )
+            
+            return request.make_response(data, headers, status=500)

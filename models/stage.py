@@ -9,7 +9,7 @@ from odoo.exceptions import ValidationError, UserError
 logger = logging.getLogger(__name__)
 
 
-class NaidashCourierStage(models.Model):
+class NaidashStage(models.Model):
     _inherit = "courier.stage.custom"
     _order = "stage_sequence asc"
 

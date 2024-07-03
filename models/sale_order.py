@@ -4,7 +4,7 @@ import pytz
 from datetime import datetime, date, timedelta
 from odoo import models, fields, api, SUPERUSER_ID, _
 from odoo.http import request
-from odoo.exceptions import ValidationError, UserError
+from odoo.exceptions import ValidationError, UserError, AccessError, AccessDenied
 from .utils import NaidashUtils
 
 logger = logging.getLogger(__name__)
@@ -145,6 +145,7 @@ class NaidashSaleOrder(models.Model):
                 if sale_order:
                     data["id"] = sale_order.id
                     data["name"] = sale_order.name
+                    data["stage"] = sale_order.state
                     data["picking_policy"] = sale_order.picking_policy
                     data["origin"] = sale_order.origin
                     data["order_reference"] = sale_order.client_order_ref
@@ -175,6 +176,7 @@ class NaidashSaleOrder(models.Model):
                         
                         data["quotation_date"] = quotation_date
                     
+                    data["created_date"] = (sale_order.create_date).strftime("%Y-%m-%d %H:%M")
                     data["subtotal"] = sale_order.amount_untaxed
                     data["tax_amount"] = sale_order.amount_tax
                     data["total_amount"] = sale_order.amount_total
@@ -224,6 +226,7 @@ class NaidashSaleOrder(models.Model):
                 if active_sale_order:
                     data["id"] = active_sale_order.id
                     data["name"] = active_sale_order.name
+                    data["stage"] = active_sale_order.state                    
                     data["picking_policy"] = active_sale_order.picking_policy
                     data["origin"] = active_sale_order.origin
                     data["order_reference"] = active_sale_order.client_order_ref
@@ -254,9 +257,9 @@ class NaidashSaleOrder(models.Model):
                         
                         data["quotation_date"] = quotation_date
                                             
-                    data["subtotal"] = sale_order.amount_untaxed
-                    data["tax_amount"] = sale_order.amount_tax
-                    data["total_amount"] = sale_order.amount_total                   
+                    data["subtotal"] = active_sale_order.amount_untaxed
+                    data["tax_amount"] = active_sale_order.amount_tax
+                    data["total_amount"] = active_sale_order.amount_total
                     data["courier"] = {"id": active_sale_order.custom_courier_id.id, "name": active_sale_order.custom_courier_id.name} if active_sale_order.custom_courier_id else {}
                     data["sales_person"] = {"id": active_sale_order.user_id.id, "name": active_sale_order.user_id.name} if active_sale_order.user_id else {}
                     data["payment_terms"] = {"id": active_sale_order.payment_term_id.id, "name": active_sale_order.payment_term_id.name} if active_sale_order.payment_term_id else {}                    
@@ -291,4 +294,223 @@ class NaidashSaleOrder(models.Model):
             return response_data
         except Exception as e:
             logger.error(f"The following error ocurred while fetching the sale order details:\n\n{str(e)}")
+            raise e
+        
+    def get_all_sales_orders_based_on_query_params(self, query_params):
+        """Get all the sales orders
+        """        
+        
+        try:
+            response_data = dict()
+            search_criteria = list()
+            all_sales_orders = []
+            is_courier_manager = self.env.user.has_group('courier_manage.courier_management_manager_custom_group')
+            
+            if query_params.get("partner_id"):
+                search_criteria.append(
+                    ('partner_id','=', query_params.get("partner_id"))
+                )
+                
+            if query_params.get("stage"):
+                search_criteria.append(
+                    ('state','=', query_params.get("stage"))
+                )                
+                
+            if query_params.get("quotation_date_from") and query_params.get("quotation_date_to"):
+                quotation_date_from = query_params.get("quotation_date_from")
+                quotation_date_to = query_params.get("quotation_date_to")
+                
+                search_criteria.append(
+                    ('date_order','>=',(datetime(quotation_date_from.year, quotation_date_from.month, quotation_date_from.day)).strftime('%Y-%m-%d 00:00:00'))
+                )
+                
+                search_criteria.append(
+                    ('date_order','<=',(datetime(quotation_date_to.year, quotation_date_to.month, quotation_date_to.day)).strftime('%Y-%m-%d 23:59:59'))
+                )                 
+                
+            if query_params.get("delivery_date_from") and query_params.get("delivery_date_to"):
+                delivery_date_from = query_params.get("delivery_date_from")
+                delivery_date_to = query_params.get("delivery_date_to")
+
+                search_criteria.append(
+                    ('commitment_date','>=',(datetime(delivery_date_from.year, delivery_date_from.month, delivery_date_from.day)).strftime('%Y-%m-%d 00:00:00'))
+                )
+                
+                search_criteria.append(
+                    ('commitment_date','<=',(datetime(delivery_date_to.year, delivery_date_to.month, delivery_date_to.day)).strftime('%Y-%m-%d 23:59:59'))                    
+                )
+                                                                                                                                                            
+            # Courier Admins/Managers can search 
+            # for more details in a sales orders
+            if is_courier_manager:
+                if query_params.get("created_date_from") and query_params.get("created_date_to"):
+                    created_date_from = query_params.get("created_date_from")
+                    created_date_to = query_params.get("created_date_to")
+                    
+                    search_criteria.append(
+                        ('create_date','>=',(datetime(created_date_from.year, created_date_from.month, created_date_from.day)).strftime('%Y-%m-%d 00:00:00'))
+                    )
+                    
+                    search_criteria.append(
+                        ('create_date','<=',(datetime(created_date_to.year, created_date_to.month, created_date_to.day)).strftime('%Y-%m-%d 23:59:59'))
+                    )                    
+                                                   
+                sale_orders = self.env['sale.order'].search(search_criteria, order='id desc')
+                
+                if sale_orders:
+                    for sale_order in sale_orders:
+                        data = dict()                    
+                        data["id"] = sale_order.id
+                        data["name"] = sale_order.name
+                        data["stage"] = sale_order.state
+                        data["picking_policy"] = sale_order.picking_policy
+                        data["origin"] = sale_order.origin
+                        data["order_reference"] = sale_order.client_order_ref
+                        data["delivery_status"] = sale_order.delivery_status or ""
+                        data["quotation_expiry_date"] = (sale_order.validity_date).strftime("%Y-%m-%d") if sale_order.validity_date else ""
+                        data["quotation_date"] = ""
+                        data["delivery_date"] = ""
+                        
+                        # Display the delivery time using the assigned user's local timezone
+                        assigned_user_timezone = sale_order.user_id.tz or pytz.utc
+                        assigned_user_timezone = pytz.timezone(assigned_user_timezone)
+                        
+                        if sale_order.commitment_date:
+                            delivery_date = (sale_order.commitment_date).strftime("%Y-%m-%d %H:%M")
+                            delivery_date = datetime.strftime(
+                                pytz.utc.localize(datetime.strptime(delivery_date, "%Y-%m-%d %H:%M")).astimezone(assigned_user_timezone),
+                                "%Y-%m-%d %H:%M"
+                            )
+                            
+                            data["delivery_date"] = delivery_date
+                            
+                        if sale_order.date_order:
+                            quotation_date = (sale_order.date_order).strftime("%Y-%m-%d %H:%M")
+                            quotation_date = datetime.strftime(
+                                pytz.utc.localize(datetime.strptime(quotation_date, "%Y-%m-%d %H:%M")).astimezone(assigned_user_timezone),
+                                "%Y-%m-%d %H:%M"
+                            )
+                            
+                            data["quotation_date"] = quotation_date
+                        
+                        data["created_date"] = (sale_order.create_date).strftime("%Y-%m-%d %H:%M")
+                        data["subtotal"] = sale_order.amount_untaxed
+                        data["tax_amount"] = sale_order.amount_tax
+                        data["total_amount"] = sale_order.amount_total
+                        data["analytic_account"] = {"id": sale_order.analytic_account_id.id, "name": sale_order.analytic_account_id.name} if sale_order.analytic_account_id else {}
+                        data["journal"] = {"id": sale_order.journal_id.id, "name": sale_order.journal_id.name} if sale_order.journal_id else {}
+                        data["courier"] = {"id": sale_order.custom_courier_id.id, "name": sale_order.custom_courier_id.name} if sale_order.custom_courier_id else {}
+                        data["company"] = {"id": sale_order.company_id.id, "name": sale_order.company_id.name} if sale_order.company_id else {}
+                        data["sales_person"] = {"id": sale_order.user_id.id, "name": sale_order.user_id.name} if sale_order.user_id else {}
+                        data["payment_terms"] = {"id": sale_order.payment_term_id.id, "name": sale_order.payment_term_id.name} if sale_order.payment_term_id else {}                    
+                                            
+                        data["partner"] = {
+                            "id": sale_order.partner_id.id, 
+                            "name": sale_order.partner_id.name,
+                            "phone": sale_order.partner_id.phone,
+                            "email": sale_order.partner_id.email,
+                            "country": {"id": sale_order.partner_id.country_id.id, "name": sale_order.partner_id.country_id.name} if sale_order.partner_id.country_id else {},
+                            "state": {"id": sale_order.partner_id.state_id.id, "name": sale_order.partner_id.state_id.name} if sale_order.partner_id.state_id else {},
+                            "address": sale_order.partner_id.street
+                        } if sale_order.partner_id else {}
+                        
+                        data["line_items"] = [
+                            {
+                                "id": item.id, 
+                                "description": item.name,
+                                "quantity": item.product_uom_qty,
+                                "unit_price": item.price_unit,
+                                "subtotal": item.price_subtotal,                            
+                                "tax": {"id": item.tax_id.id, "name": item.tax_id.name} if item.tax_id else {},
+                                "courier_line": {"id": item.courier_line_id.id, "name": item.courier_line_id.name} if item.courier_line_id else {},
+                                "product": {"id": item.product_id.id, "name": item.product_id.name} if item.product_id else {}
+                            } for item in sale_order.order_line
+                        ] if sale_order.order_line else []
+                        
+                        all_sales_orders.append(data)
+                    
+                    response_data["code"] = 200
+                    response_data["message"] = "Success"
+                    response_data["data"] = all_sales_orders
+                else:
+                    response_data["code"] = 404
+                    response_data["message"] = "Sales Order Not Found!"
+            else:
+                active_sales_orders = self.env['sale.order'].search(search_criteria, order='id asc')
+                
+                if active_sales_orders:
+                    for active_sale_order in active_sales_orders:
+                        data = dict()
+                        data["id"] = active_sale_order.id
+                        data["name"] = active_sale_order.name
+                        data["stage"] = active_sale_order.state                    
+                        data["picking_policy"] = active_sale_order.picking_policy
+                        data["origin"] = active_sale_order.origin
+                        data["order_reference"] = active_sale_order.client_order_ref
+                        data["delivery_status"] = active_sale_order.delivery_status or ""
+                        data["quotation_expiry_date"] = (active_sale_order.validity_date).strftime("%Y-%m-%d") if active_sale_order.validity_date else ""
+                        data["quotation_date"] = ""
+                        data["delivery_date"] = ""
+                        
+                        # Display the delivery time using the assigned user's local timezone
+                        assigned_user_timezone = active_sale_order.user_id.tz or pytz.utc
+                        assigned_user_timezone = pytz.timezone(assigned_user_timezone)
+                        
+                        if active_sale_order.commitment_date:
+                            delivery_date = (active_sale_order.commitment_date).strftime("%Y-%m-%d %H:%M")
+                            delivery_date = datetime.strftime(
+                                pytz.utc.localize(datetime.strptime(delivery_date, "%Y-%m-%d %H:%M")).astimezone(assigned_user_timezone),
+                                "%Y-%m-%d %H:%M"
+                            )
+                            
+                            data["delivery_date"] = delivery_date
+                            
+                        if active_sale_order.date_order:
+                            quotation_date = (active_sale_order.date_order).strftime("%Y-%m-%d %H:%M")
+                            quotation_date = datetime.strftime(
+                                pytz.utc.localize(datetime.strptime(quotation_date, "%Y-%m-%d %H:%M")).astimezone(assigned_user_timezone),
+                                "%Y-%m-%d %H:%M"
+                            )
+                            
+                            data["quotation_date"] = quotation_date
+                                                
+                        data["subtotal"] = active_sale_order.amount_untaxed
+                        data["tax_amount"] = active_sale_order.amount_tax
+                        data["total_amount"] = active_sale_order.amount_total
+                        data["courier"] = {"id": active_sale_order.custom_courier_id.id, "name": active_sale_order.custom_courier_id.name} if active_sale_order.custom_courier_id else {}
+                        data["sales_person"] = {"id": active_sale_order.user_id.id, "name": active_sale_order.user_id.name} if active_sale_order.user_id else {}
+                        data["payment_terms"] = {"id": active_sale_order.payment_term_id.id, "name": active_sale_order.payment_term_id.name} if active_sale_order.payment_term_id else {}                    
+                                            
+                        data["partner"] = {
+                            "id": active_sale_order.partner_id.id, 
+                            "name": active_sale_order.partner_id.name,
+                            "phone": active_sale_order.partner_id.phone,
+                            "email": active_sale_order.partner_id.email,
+                            "country": {"id": active_sale_order.partner_id.country_id.id, "name": active_sale_order.partner_id.country_id.name} if active_sale_order.partner_id.country_id else {},
+                            "state": {"id": active_sale_order.partner_id.state_id.id, "name": active_sale_order.partner_id.state_id.name} if active_sale_order.partner_id.state_id else {},
+                            "address": active_sale_order.partner_id.street
+                        } if active_sale_order.partner_id else {}
+                        
+                        data["line_items"] = [
+                            {
+                                "id": item.id, 
+                                "description": item.name,
+                                "quantity": item.product_uom_qty,
+                                "unit_price": item.price_unit,
+                                "subtotal": item.price_subtotal,                            
+                            } for item in active_sale_order.order_line
+                        ] if active_sale_order.order_line else []
+                                            
+                        all_sales_orders.append(data)
+                        
+                    response_data["code"] = 200
+                    response_data["message"] = "Success"
+                    response_data["data"] = all_sales_orders
+                else:
+                    response_data["code"] = 404
+                    response_data["message"] = "Sales Order Not Found!"
+            
+            return response_data
+        except Exception as e:
+            logger.error(f"The following error ocurred while fetching the sales orders:\n\n{str(e)}")
             raise e        

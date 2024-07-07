@@ -1,10 +1,16 @@
 # -*- coding: utf-8 -*-
-from odoo import http
-from odoo.http import request, route, SessionExpiredException
 from datetime import datetime
 import json
 import logging
 
+from odoo import http
+from odoo.http import request, route, SessionExpiredException
+from odoo.service import security
+from werkzeug.http import HTTP_STATUS_CODES
+from werkzeug.exceptions import (NotFound, BadRequest, Unauthorized, HTTPException, Forbidden, 
+                                 MethodNotAllowed, RequestTimeout, Conflict, UnprocessableEntity, 
+                                 InternalServerError, GatewayTimeout, ServiceUnavailable)
+from odoo.exceptions import UserError, MissingError, AccessError, AccessDenied
 
 logger = logging.getLogger(__name__)
 
@@ -139,6 +145,44 @@ class NaidashSaleOrder(http.Controller):
                 return request.make_response(data, headers, status=status_code)
         except Exception as e:
             logger.exception(f"The following error occurred while fetching the sales orders:\n\n{str(e)}")
+            data = json.dumps(
+                {
+                    "error": {
+                        "code": 500,
+                        "message": str(e)}
+                }
+            )
+            
+            return request.make_response(data, headers, status=500)
+        
+    @route('/api/v1/naidash/sale/<int:sale_id>/confirm', methods=['GET'], auth='user', type='http')
+    def confirm_the_sale_order(self, sale_id):
+        """Confirm the sale order details
+        """      
+                
+        headers = [('Content-Type', 'application/json')]                
+        try:
+            sale_order_details = request.env['sale.order'].confirm_sale_order(sale_id)
+            status_code = sale_order_details.get("code")
+            
+            if status_code != 200:
+                data = json.dumps(
+                    {
+                        "error": sale_order_details
+                    }
+                )
+
+                return request.make_response(data, headers, status=status_code)                 
+            else:
+                data = json.dumps(
+                    {
+                        "result": sale_order_details
+                    }
+                )
+
+                return request.make_response(data, headers, status=status_code)
+        except Exception as e:
+            logger.exception(f"The following error occurred while confirming the sale order:\n\n{str(e)}")
             data = json.dumps(
                 {
                     "error": {

@@ -1099,4 +1099,82 @@ class NaidashCourier(models.Model):
             return response_data
         except Exception as e:
             logger.error(f"The following error ocurred while fetching the courier details:\n\n{str(e)}")
-            raise e        
+            raise e
+        
+    def move_to_next_stage(self, courier_id):
+        """Moves a Courier request to the next stage"""
+
+        logged_in_user = self.env.user.id 
+        response_data = dict()
+
+        try:
+            is_courier_manager = self.env.user.has_group('courier_manage.courier_management_manager_custom_group')
+            
+            if is_courier_manager:
+                courier = self.env['courier.custom'].search(
+                    [
+                        ('id', '=', int(courier_id))
+                    ]
+                )
+                
+                if courier:
+                    current_stage = courier.stage_id
+                    # Get the next stage if the current stage is neither marked as `last` nor `cancel`
+                    if courier.stage_id.is_last_stage == False or courier.stage_id.is_cancel_stage == False:
+                        next_stage = self.env['courier.stage.custom'].search(
+                            [
+                                ('stage_sequence', '>', current_stage.stage_sequence)
+                            ], 
+                            order='stage_sequence asc', limit=1
+                        )
+
+                        if next_stage:
+                            courier.write({"stage_id": next_stage.id})
+                            response_data["code"] = 200
+                            response_data["message"] = f"successfully moved to {courier.stage_id.name}!"
+                        else:
+                            response_data["code"] = 404
+                            response_data["message"] = "Stage not found!"
+                    else:
+                        response_data["code"] = 403
+                        response_data["message"] = f"{self.env.user.name}, This action is forbidden!"
+                else:
+                    response_data["code"] = 404
+                    response_data["message"] = "Courier not found!"
+            else:
+                active_courier = self.env['courier.custom'].search(
+                    [
+                        ('id', '=', int(courier_id)),
+                        ('user_id', '=', logged_in_user)
+                    ]
+                )
+                
+                if active_courier:
+                    current_stage = active_courier.stage_id
+                    # Get the next stage if the current stage is neither marked as `last` nor `cancel`
+                    if active_courier.stage_id.is_last_stage == False or active_courier.stage_id.is_cancel_stage == False:
+                        next_stage = self.env['courier.stage.custom'].search(
+                            [
+                                ('stage_sequence', '>', current_stage.stage_sequence)
+                            ], 
+                            order='stage_sequence asc', limit=1
+                        )
+
+                        if next_stage:
+                            active_courier.write({"stage_id": next_stage.id})
+                            response_data["code"] = 200
+                            response_data["message"] = f"successfully moved to {active_courier.stage_id.name}!"
+                        else:
+                            response_data["code"] = 404
+                            response_data["message"] = "Stage not found!"
+                    else:
+                        response_data["code"] = 403
+                        response_data["message"] = f"{self.env.user.name}, This action is forbidden!"
+                else:
+                    response_data["code"] = 404
+                    response_data["message"] = "Courier not found!"
+            
+            return response_data
+        except Exception as e:
+            logger.error(f"The following error ocurred while updating the courier request:\n\n{str(e)}")
+            raise e

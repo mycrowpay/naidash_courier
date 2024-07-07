@@ -1,7 +1,7 @@
 import logging
 
 from datetime import datetime
-from odoo import models, _
+from odoo import models, _, fields, api
 from odoo.http import request
 from odoo.exceptions import ValidationError, UserError
 
@@ -12,6 +12,18 @@ logger = logging.getLogger(__name__)
 class NaidashStage(models.Model):
     _inherit = "courier.stage.custom"
     _order = "stage_sequence asc"
+    
+    is_last_stage = fields.Boolean(
+        string = "Is This The Last Stage?",
+        default = False,
+        help="If set to true, this stage will be considered as the last/final step in the pipeline"
+    )
+    
+    is_cancel_stage = fields.Boolean(
+        string = "Is This The Cancellation Stage?",
+        default = False,
+        help="If set to true, this stage will be considered as the cancellation step in the pipeline"
+    )    
 
     def create_stage(self, request_data):
         """Create the stage
@@ -27,12 +39,16 @@ class NaidashStage(models.Model):
                 stage_sequence = int(request_data.get("stage_sequence"))
                 is_form_readonly = request_data.get("is_form_readonly", False)
                 allow_sales_order_creation = request_data.get("allow_sales_order_creation", False)
+                is_last_stage = request_data.get("is_last_stage", False)
+                is_cancel_stage = request_data.get("is_cancel_stage", False)
                 
                 vals = {
                     "name": stage_name,
                     "stage_sequence": stage_sequence,
                     "is_form_readonly": is_form_readonly,
-                    "is_saleorder": allow_sales_order_creation
+                    "is_saleorder": allow_sales_order_creation,
+                    "is_last_stage": is_last_stage,
+                    "is_cancel_stage": is_cancel_stage
                 }
 
                 stage = self.env['courier.stage.custom'].create(vals)
@@ -89,6 +105,12 @@ class NaidashStage(models.Model):
                     if request_data.get("activate_stage") not in search_param_values:
                         stage_details["active"] = request_data.get("activate_stage")
                         
+                    if request_data.get("is_last_stage") not in search_param_values:
+                        stage_details["is_last_stage"] = request_data.get("is_last_stage")
+                        
+                    if request_data.get("is_cancel_stage") not in search_param_values:
+                        stage_details["is_cancel_stage"] = request_data.get("is_cancel_stage")
+                        
                     # Update stage details
                     if stage_details:
                         stage.write(stage_details)
@@ -139,6 +161,8 @@ class NaidashStage(models.Model):
                     data["allow_sales_order_creation"] = stage.is_saleorder
                     data["fold_stage"] = stage.fold
                     data["activate_stage"] = stage.active
+                    data["is_last_stage"] = stage.is_last_stage
+                    data["is_cancel_stage"] = stage.is_cancel_stage
                     
                     response_data["code"] = 200
                     response_data["message"] = "Success"
@@ -191,6 +215,8 @@ class NaidashStage(models.Model):
                         data["allow_sales_order_creation"] = stage.is_saleorder
                         data["fold_stage"] = stage.fold
                         data["activate_stage"] = stage.active
+                        data["is_last_stage"] = stage.is_last_stage
+                        data["is_cancel_stage"] = stage.is_cancel_stage
                         
                         all_stages.append(data)
                     

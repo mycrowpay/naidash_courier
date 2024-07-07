@@ -100,11 +100,22 @@ class NaidashSaleOrder(models.Model):
                         # Create Sales Order
                         sale_order = self.env['sale.order'].create(vals)
                         
+                        # Update the Courier Request 
+                        courier.write({"sale_order_id": sale_order.id})
+
                         if sale_order:
                             data['id'] = sale_order.id
                             response_data["code"] = 201
-                            response_data["message"] = "Sales order created successfully"
+                            response_data["message"] = "Sale order created successfully"
                             response_data["data"] = data
+                            
+                        courier_stage_update = courier.move_to_next_stage(courier.id)
+                        status_code = courier_stage_update.get("code")
+                        if status_code == 200:                                     
+                            response_data["code"] = 201
+                            response_data["message"] = "Sale order created & courier request " + courier_stage_update.get("message")
+                        else:
+                            return courier_stage_update                        
                     else:
                         response_data["code"] = 400
                         response_data["message"] = f"Bad request! Detected an invalid stage or no line items in {courier.name}"
@@ -513,4 +524,67 @@ class NaidashSaleOrder(models.Model):
             return response_data
         except Exception as e:
             logger.error(f"The following error ocurred while fetching the sales orders:\n\n{str(e)}")
-            raise e        
+            raise e
+        
+    def confirm_sale_order(self, sale_order_id):
+        """ Confirm the sale order and set the confirmation date.
+        """
+        
+        try:
+            response_data = dict()
+            is_courier_manager = self.env.user.has_group('courier_manage.courier_management_manager_custom_group')
+            
+            # Courier Admins/Managers can confirm a sale order
+            if is_courier_manager:
+                sale_order = self.env['sale.order'].search(
+                    [
+                        ('id','=', int(sale_order_id))
+                    ]
+                )
+                
+                if sale_order:
+                    if not all(order._can_be_confirmed() for order in sale_order):
+                        response_data["code"] = 409
+                        response_data["message"] = f"The following sales order can't be confirmed: {', '.join(sale_order.mapped('display_name'))}"
+                        return response_data
+
+                    sale_order.order_line._validate_analytic_distribution()
+
+                    for order in sale_order:
+                        order.validate_taxes_on_sales_order()
+                        if order.partner_id in order.message_partner_ids:
+                            continue
+                        order.message_subscribe([order.partner_id.id])
+
+                    confirmed_sale_order = sale_order.write(sale_order._prepare_confirmation_values())
+
+                    if confirmed_sale_order:
+                        response_data["code"] = 200
+                        response_data["message"] = "Sale order confirmed"
+
+                    # Context key 'default_name' is sometimes propagated up to here.
+                    # We don't need it and it creates issues in the creation of linked records.
+                    context = sale_order._context.copy()
+                    context.pop('default_name', None)
+
+                    sale_order.with_context(context)._action_confirm()
+
+                    sale_order.filtered(lambda so: so._should_be_locked()).action_lock()
+                    
+                    courier = self.env['courier.custom'].move_to_next_stage(sale_order.custom_courier_id.id)
+                    status_code = courier.get("code")
+                    if status_code == 200:                                     
+                        response_data["code"] = status_code
+                        response_data["message"] = "Sale order confirmed & courier request " + courier.get("message")
+                    else:
+                        return courier
+                else:
+                    response_data["code"] = 404
+                    response_data["message"] = "Sale order not found!"
+            else:
+                response_data["code"] = 403               
+                response_data["message"] = f"{self.env.user.name}, This action is forbidden!"
+            return response_data
+        except Exception as e:
+            logger.error(f"The following error ocurred while confirming the sale order details:\n\n{str(e)}")
+            raise e

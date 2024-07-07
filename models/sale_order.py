@@ -526,8 +526,8 @@ class NaidashSaleOrder(models.Model):
             logger.error(f"The following error ocurred while fetching the sales orders:\n\n{str(e)}")
             raise e
         
-    def confirm_sale_order(self, sale_order_id):
-        """ Confirm the sale order and set the confirmation date.
+    def confirm_sales_order(self, sale_order_id):
+        """ Confirm the sales order and set the confirmation date.
         """
         
         try:
@@ -586,5 +586,48 @@ class NaidashSaleOrder(models.Model):
                 response_data["message"] = f"{self.env.user.name}, This action is forbidden!"
             return response_data
         except Exception as e:
-            logger.error(f"The following error ocurred while confirming the sale order details:\n\n{str(e)}")
+            logger.error(f"The following error ocurred while confirming the sales order details:\n\n{str(e)}")
             raise e
+        
+    def cancel_sales_order(self, sale_order_id):
+        """ Cancel the sales order
+        """
+        
+        try:
+            response_data = dict()
+            is_courier_manager = self.env.user.has_group('courier_manage.courier_management_manager_custom_group')
+            
+            # Courier Admins/Managers can cancel a sales order
+            if is_courier_manager:
+                sale_order = self.env['sale.order'].search(
+                    [
+                        ('id','=', int(sale_order_id))
+                    ]
+                )
+                
+                if sale_order:
+                    if any(order.locked for order in sale_order):
+                        response_data["code"] = 403
+                        response_data["message"] = f"{self.env.user.name}, You cannot cancel a locked sales order.Please unlock it first"
+                        return response_data
+                    
+                    can_be_cancelled = sale_order._show_cancel_wizard()
+                    if can_be_cancelled:
+                        response_data["code"] = 403
+                        response_data["message"] = f"Sales order {sale_order.name} cannot be cancelled"
+                    else:
+                        cancelled_sales_order = sale_order._action_cancel()
+                    
+                        if cancelled_sales_order:
+                            response_data["code"] = 200
+                            response_data["message"] = f"Sales order {sale_order.name} has been cancelled"
+                else:
+                    response_data["code"] = 404
+                    response_data["message"] = "Sales order not found!"                            
+            else:
+                response_data["code"] = 403
+                response_data["message"] = f"{self.env.user.name}, This action is forbidden!"
+            return response_data
+        except Exception as e:
+            logger.error(f"The following error ocurred while cancelling the sales order:\n\n{str(e)}")
+            raise e        

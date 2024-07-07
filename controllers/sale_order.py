@@ -156,13 +156,13 @@ class NaidashSaleOrder(http.Controller):
             return request.make_response(data, headers, status=500)
         
     @route('/api/v1/naidash/sale/<int:sale_id>/confirm', methods=['GET'], auth='user', type='http')
-    def confirm_the_sale_order(self, sale_id):
-        """Confirm the sale order details
+    def confirm_the_sales_order(self, sale_id):
+        """Confirm the sales order details
         """      
                 
         headers = [('Content-Type', 'application/json')]                
         try:
-            sale_order_details = request.env['sale.order'].confirm_sale_order(sale_id)
+            sale_order_details = request.env['sale.order'].confirm_sales_order(sale_id)
             status_code = sale_order_details.get("code")
             
             if status_code != 200:
@@ -183,6 +183,44 @@ class NaidashSaleOrder(http.Controller):
                 return request.make_response(data, headers, status=status_code)
         except Exception as e:
             logger.exception(f"The following error occurred while confirming the sale order:\n\n{str(e)}")
+            data = json.dumps(
+                {
+                    "error": {
+                        "code": 500,
+                        "message": str(e)}
+                }
+            )
+            
+            return request.make_response(data, headers, status=500)
+        
+    @route('/api/v1/naidash/sale/<int:sale_id>/cancel', methods=['GET'], auth='user', type='http')
+    def cancel_the_sales_order(self, sale_id):
+        """Cancel the sales order
+        """      
+                
+        headers = [('Content-Type', 'application/json')]                
+        try:
+            sale_order_details = request.env['sale.order'].cancel_sales_order(sale_id)
+            status_code = sale_order_details.get("code")
+            
+            if status_code != 200:
+                data = json.dumps(
+                    {
+                        "error": sale_order_details
+                    }
+                )
+
+                return request.make_response(data, headers, status=status_code)                 
+            else:
+                data = json.dumps(
+                    {
+                        "result": sale_order_details
+                    }
+                )
+
+                return request.make_response(data, headers, status=status_code)
+        except Exception as e:
+            logger.exception(f"The following error occurred while cancelling the sales order:\n\n{str(e)}")
             data = json.dumps(
                 {
                     "error": {

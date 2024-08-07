@@ -269,12 +269,12 @@ class NaidashCourier(models.Model):
                     response_data["message"] = "Bad Request! Add items to transport"
                     return response_data
                 
-                if isinstance(tag_ids, list) == False :
+                if isinstance(tag_ids, list) == False:
                     response_data["code"] = 422
                     response_data["message"] = "Unprocessable Content! Expected a list of integer(s) in `tag_ids`"
                     return response_data                
                 
-                if isinstance(line_items, list) == False :
+                if isinstance(line_items, list) == False:
                     response_data["code"] = 422
                     response_data["message"] = "Unprocessable Content! Expected a list of objects in `line_items`"
                     return response_data

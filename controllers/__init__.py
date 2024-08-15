@@ -6,3 +6,4 @@ from . import sale_order
 from . import category
 from . import tag
 from . import priority
+from . import weight_price

@@ -7,3 +7,4 @@ from . import category
 from . import tag
 from . import priority
 from . import weight_price
+from . import distance_price

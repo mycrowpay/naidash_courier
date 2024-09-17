@@ -10,3 +10,4 @@ from . import weight_price
 from . import distance_price
 from . import dimension_price
 from . import product
+from . import tax

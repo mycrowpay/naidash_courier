@@ -140,7 +140,7 @@ class NaidashProduct(models.Model):
                     if request_data.get("company_id"):
                         product_details["company_id"] = int(request_data.get("company_id"))
                         
-                    if request_data.get("active"):
+                    if request_data.get("active") == True or request_data.get("active") == False:
                         product_details["active"] = request_data.get("active")
                                             
                     if request_data.get("tax_ids"):

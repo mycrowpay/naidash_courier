@@ -14,15 +14,15 @@ from odoo.exceptions import UserError, MissingError, AccessError, AccessDenied
 
 logger = logging.getLogger(__name__)
 
-class NaidashSaleOrder(http.Controller):
+class NaidashSalesOrder(http.Controller):
     @route('/api/v1/naidash/sale', methods=['POST'], auth='user', type='json')
-    def create_sale_order(self, **kw):
+    def create_sales_order(self, **kw):
         """Create the sale order
         """ 
                         
         try:
             request_data = json.loads(request.httprequest.data)                        
-            sale_order_details = request.env['sale.order'].create_sale_order(request_data)
+            sale_order_details = request.env['sale.order'].create_sales_order(request_data)
             return sale_order_details
         except TypeError as e:
             logger.error(f"This datatype error ocurred while creating the sale order:\n\n{str(e)}")
@@ -38,14 +38,14 @@ class NaidashSaleOrder(http.Controller):
             }
             
     @route('/api/v1/naidash/sale/<int:sale_id>', methods=['GET'], auth='user', type='http')
-    def get_sale_order(self, sale_id):
-        """Get the sale order details
+    def get_sales_order(self, sale_id):
+        """Get the sales order details
         """ 
                 
         headers = [('Content-Type', 'application/json')]
                 
         try:
-            sale_order_details = request.env['sale.order'].get_a_sale_order(sale_id)
+            sale_order_details = request.env['sale.order'].get_a_sales_order(sale_id)
             status_code = sale_order_details.get("code")
             
             if status_code == 404:
@@ -70,14 +70,15 @@ class NaidashSaleOrder(http.Controller):
                 {
                     "error": {
                         "code": 500,
-                        "message": str(e)}
+                        "message": str(e)
+                    }
                 }
             )
             
             return request.make_response(data, headers, status=500)
         
     @route('/api/v1/naidash/sale', methods=['GET'], auth='user', type='http')
-    def get_sales_orders(self):
+    def get_all_sales_orders(self):
         """
         Returns all sales orders based on the query parameter(s).
         """ 
@@ -124,7 +125,7 @@ class NaidashSaleOrder(http.Controller):
 
                 return request.make_response(data, headers, status=400)             
             
-            sale_order_details = request.env['sale.order'].get_all_sales_orders_based_on_query_params(query_params)
+            sale_order_details = request.env['sale.order'].get_all_sales_orders(query_params)
             status_code = sale_order_details.get("code")
             
             if status_code == 404:
@@ -149,7 +150,8 @@ class NaidashSaleOrder(http.Controller):
                 {
                     "error": {
                         "code": 500,
-                        "message": str(e)}
+                        "message": str(e)
+                    }
                 }
             )
             
@@ -187,7 +189,8 @@ class NaidashSaleOrder(http.Controller):
                 {
                     "error": {
                         "code": 500,
-                        "message": str(e)}
+                        "message": str(e)
+                    }
                 }
             )
             
@@ -225,7 +228,8 @@ class NaidashSaleOrder(http.Controller):
                 {
                     "error": {
                         "code": 500,
-                        "message": str(e)}
+                        "message": str(e)
+                    }
                 }
             )
             

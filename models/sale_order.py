@@ -10,11 +10,11 @@ from .utils import NaidashUtils
 logger = logging.getLogger(__name__)
 nautils = NaidashUtils()
 
-class NaidashSaleOrder(models.Model):
+class NaidashSalesOrder(models.Model):
     _inherit = 'sale.order'
     
-    def create_sale_order(self, request_data):
-        """Create Sale Order
+    def create_sales_order(self, request_data):
+        """Create a sales order
         """
         
         try:
@@ -135,17 +135,20 @@ class NaidashSaleOrder(models.Model):
             logger.error(f"An error ocurred while creating the sale order:\n\n{str(e)}")
             raise e
         
-    def get_a_sale_order(self, sale_id):
-        """Get the sale order details
-        """        
+    def get_a_sales_order(self, sale_id):
+        """Get the sales order details
+        """
         
         try:
             data = dict()            
             response_data = dict()
             is_courier_manager = self.env.user.has_group('courier_manage.courier_management_manager_custom_group')
-            
+            logged_in_user = self.env.user
+            user_timezone = logged_in_user.tz or pytz.utc
+            user_timezone = pytz.timezone(user_timezone)
+                        
             # Courier Admins/Managers can search 
-            # for more details in a sale order
+            # for more details in a sales order
             if is_courier_manager:
                 sale_order = self.env['sale.order'].search(
                     [
@@ -165,14 +168,10 @@ class NaidashSaleOrder(models.Model):
                     data["quotation_date"] = ""
                     data["delivery_date"] = ""
                     
-                    # Display the delivery time using the assigned user's local timezone
-                    assigned_user_timezone = sale_order.user_id.tz or pytz.utc
-                    assigned_user_timezone = pytz.timezone(assigned_user_timezone)
-                    
                     if sale_order.commitment_date:
                         delivery_date = (sale_order.commitment_date).strftime("%Y-%m-%d %H:%M")
                         delivery_date = datetime.strftime(
-                            pytz.utc.localize(datetime.strptime(delivery_date, "%Y-%m-%d %H:%M")).astimezone(assigned_user_timezone),
+                            pytz.utc.localize(datetime.strptime(delivery_date, "%Y-%m-%d %H:%M")).astimezone(user_timezone),
                             "%Y-%m-%d %H:%M"
                         )
                         
@@ -181,16 +180,26 @@ class NaidashSaleOrder(models.Model):
                     if sale_order.date_order:
                         quotation_date = (sale_order.date_order).strftime("%Y-%m-%d %H:%M")
                         quotation_date = datetime.strftime(
-                            pytz.utc.localize(datetime.strptime(quotation_date, "%Y-%m-%d %H:%M")).astimezone(assigned_user_timezone),
+                            pytz.utc.localize(datetime.strptime(quotation_date, "%Y-%m-%d %H:%M")).astimezone(user_timezone),
                             "%Y-%m-%d %H:%M"
                         )
                         
                         data["quotation_date"] = quotation_date
+                        
+                    creation_date = (sale_order.create_date).strftime("%Y-%m-%d %H:%M")
+                    creation_date = datetime.strftime(
+                        pytz.utc.localize(datetime.strptime(creation_date, "%Y-%m-%d %H:%M")).astimezone(user_timezone),
+                        "%Y-%m-%d %H:%M"
+                    )
                     
-                    data["created_date"] = (sale_order.create_date).strftime("%Y-%m-%d %H:%M")
+                    data["created_date"] = creation_date
+                    data["created_by"] = sale_order.create_uid.name
                     data["subtotal"] = sale_order.amount_untaxed
                     data["tax_amount"] = sale_order.amount_tax
                     data["total_amount"] = sale_order.amount_total
+                    data["invoicing_status"] = sale_order.invoice_status
+                    data["invoice"] = [{"id": invoice.id, "name": invoice.name, "stage": invoice.state} for invoice in sale_order.invoice_ids] if sale_order.invoice_ids else []
+                    data["currency"] = {"id": sale_order.currency_id.id, "name": sale_order.currency_id.name} if sale_order.currency_id else {}
                     data["analytic_account"] = {"id": sale_order.analytic_account_id.id, "name": sale_order.analytic_account_id.name} if sale_order.analytic_account_id else {}
                     data["journal"] = {"id": sale_order.journal_id.id, "name": sale_order.journal_id.name} if sale_order.journal_id else {}
                     data["courier"] = {"id": sale_order.custom_courier_id.id, "name": sale_order.custom_courier_id.name} if sale_order.custom_courier_id else {}
@@ -213,8 +222,10 @@ class NaidashSaleOrder(models.Model):
                             "id": item.id, 
                             "description": item.name,
                             "quantity": item.product_uom_qty,
+                            "invoiced_quantity": item.qty_invoiced,
                             "unit_price": item.price_unit,
-                            "subtotal": item.price_subtotal,                            
+                            "subtotal": item.price_subtotal,
+                            "total": item.price_total,
                             "tax": {"id": item.tax_id.id, "name": item.tax_id.name} if item.tax_id else {},
                             "courier_line": {"id": item.courier_line_id.id, "name": item.courier_line_id.name} if item.courier_line_id else {},
                             "product": {"id": item.product_id.id, "name": item.product_id.name} if item.product_id else {}
@@ -226,7 +237,7 @@ class NaidashSaleOrder(models.Model):
                     response_data["data"] = data
                 else:
                     response_data["code"] = 404
-                    response_data["message"] = "Sale Order Not Found!"
+                    response_data["message"] = "Sales order not found!"
             else:
                 active_sale_order = self.env['sale.order'].search(
                     [
@@ -246,14 +257,10 @@ class NaidashSaleOrder(models.Model):
                     data["quotation_date"] = ""
                     data["delivery_date"] = ""
                     
-                    # Display the delivery time using the assigned user's local timezone
-                    assigned_user_timezone = active_sale_order.user_id.tz or pytz.utc
-                    assigned_user_timezone = pytz.timezone(assigned_user_timezone)
-                    
                     if active_sale_order.commitment_date:
                         delivery_date = (active_sale_order.commitment_date).strftime("%Y-%m-%d %H:%M")
                         delivery_date = datetime.strftime(
-                            pytz.utc.localize(datetime.strptime(delivery_date, "%Y-%m-%d %H:%M")).astimezone(assigned_user_timezone),
+                            pytz.utc.localize(datetime.strptime(delivery_date, "%Y-%m-%d %H:%M")).astimezone(user_timezone),
                             "%Y-%m-%d %H:%M"
                         )
                         
@@ -262,15 +269,26 @@ class NaidashSaleOrder(models.Model):
                     if active_sale_order.date_order:
                         quotation_date = (active_sale_order.date_order).strftime("%Y-%m-%d %H:%M")
                         quotation_date = datetime.strftime(
-                            pytz.utc.localize(datetime.strptime(quotation_date, "%Y-%m-%d %H:%M")).astimezone(assigned_user_timezone),
+                            pytz.utc.localize(datetime.strptime(quotation_date, "%Y-%m-%d %H:%M")).astimezone(user_timezone),
                             "%Y-%m-%d %H:%M"
                         )
                         
                         data["quotation_date"] = quotation_date
                                             
+                    creation_date = (active_sale_order.create_date).strftime("%Y-%m-%d %H:%M")
+                    creation_date = datetime.strftime(
+                        pytz.utc.localize(datetime.strptime(creation_date, "%Y-%m-%d %H:%M")).astimezone(user_timezone),
+                        "%Y-%m-%d %H:%M"
+                    )
+                    
+                    data["created_date"] = creation_date
+                    data["created_by"] = active_sale_order.create_uid.name
                     data["subtotal"] = active_sale_order.amount_untaxed
                     data["tax_amount"] = active_sale_order.amount_tax
                     data["total_amount"] = active_sale_order.amount_total
+                    data["invoicing_status"] = active_sale_order.invoice_status
+                    data["invoice"] = [{"id": invoice.id, "name": invoice.name, "stage": invoice.state} for invoice in active_sale_order.invoice_ids] if active_sale_order.invoice_ids else []
+                    data["currency"] = {"id": active_sale_order.currency_id.id, "name": active_sale_order.currency_id.name} if active_sale_order.currency_id else {}
                     data["courier"] = {"id": active_sale_order.custom_courier_id.id, "name": active_sale_order.custom_courier_id.name} if active_sale_order.custom_courier_id else {}
                     data["sales_person"] = {"id": active_sale_order.user_id.id, "name": active_sale_order.user_id.name} if active_sale_order.user_id else {}
                     data["payment_terms"] = {"id": active_sale_order.payment_term_id.id, "name": active_sale_order.payment_term_id.name} if active_sale_order.payment_term_id else {}                    
@@ -290,8 +308,10 @@ class NaidashSaleOrder(models.Model):
                             "id": item.id, 
                             "description": item.name,
                             "quantity": item.product_uom_qty,
+                            "invoiced_quantity": item.qty_invoiced,
                             "unit_price": item.price_unit,
-                            "subtotal": item.price_subtotal,                            
+                            "subtotal": item.price_subtotal,
+                            "total": item.price_total
                         } for item in active_sale_order.order_line
                     ] if active_sale_order.order_line else []
                     
@@ -300,15 +320,16 @@ class NaidashSaleOrder(models.Model):
                     response_data["data"] = data
                 else:
                     response_data["code"] = 404
-                    response_data["message"] = "Sale Order Not Found!"
+                    response_data["message"] = "Sales order not found!"
                                 
             return response_data
         except Exception as e:
-            logger.error(f"The following error ocurred while fetching the sale order details:\n\n{str(e)}")
+            logger.error(f"The following error ocurred while fetching the sales order details:\n\n{str(e)}")
             raise e
         
-    def get_all_sales_orders_based_on_query_params(self, query_params):
-        """Get all the sales orders
+    def get_all_sales_orders(self, query_params):
+        """Get all sales orders
+        based on the query parameters
         """        
         
         try:
@@ -316,6 +337,9 @@ class NaidashSaleOrder(models.Model):
             search_criteria = list()
             all_sales_orders = []
             is_courier_manager = self.env.user.has_group('courier_manage.courier_management_manager_custom_group')
+            logged_in_user = self.env.user
+            user_timezone = logged_in_user.tz or pytz.utc
+            user_timezone = pytz.timezone(user_timezone)            
             
             if query_params.get("partner_id"):
                 search_criteria.append(
@@ -366,10 +390,10 @@ class NaidashSaleOrder(models.Model):
                         ('create_date','<=',(datetime(created_date_to.year, created_date_to.month, created_date_to.day)).strftime('%Y-%m-%d 23:59:59'))
                     )                    
                                                    
-                sale_orders = self.env['sale.order'].search(search_criteria, order='id desc')
+                sales_orders = self.env['sale.order'].search(search_criteria, order='id desc')
                 
-                if sale_orders:
-                    for sale_order in sale_orders:
+                if sales_orders:
+                    for sale_order in sales_orders:
                         data = dict()                    
                         data["id"] = sale_order.id
                         data["name"] = sale_order.name
@@ -382,14 +406,10 @@ class NaidashSaleOrder(models.Model):
                         data["quotation_date"] = ""
                         data["delivery_date"] = ""
                         
-                        # Display the delivery time using the assigned user's local timezone
-                        assigned_user_timezone = sale_order.user_id.tz or pytz.utc
-                        assigned_user_timezone = pytz.timezone(assigned_user_timezone)
-                        
                         if sale_order.commitment_date:
                             delivery_date = (sale_order.commitment_date).strftime("%Y-%m-%d %H:%M")
                             delivery_date = datetime.strftime(
-                                pytz.utc.localize(datetime.strptime(delivery_date, "%Y-%m-%d %H:%M")).astimezone(assigned_user_timezone),
+                                pytz.utc.localize(datetime.strptime(delivery_date, "%Y-%m-%d %H:%M")).astimezone(user_timezone),
                                 "%Y-%m-%d %H:%M"
                             )
                             
@@ -398,16 +418,26 @@ class NaidashSaleOrder(models.Model):
                         if sale_order.date_order:
                             quotation_date = (sale_order.date_order).strftime("%Y-%m-%d %H:%M")
                             quotation_date = datetime.strftime(
-                                pytz.utc.localize(datetime.strptime(quotation_date, "%Y-%m-%d %H:%M")).astimezone(assigned_user_timezone),
+                                pytz.utc.localize(datetime.strptime(quotation_date, "%Y-%m-%d %H:%M")).astimezone(user_timezone),
                                 "%Y-%m-%d %H:%M"
                             )
                             
                             data["quotation_date"] = quotation_date
+                            
+                        creation_date = (sale_order.create_date).strftime("%Y-%m-%d %H:%M")
+                        creation_date = datetime.strftime(
+                            pytz.utc.localize(datetime.strptime(creation_date, "%Y-%m-%d %H:%M")).astimezone(user_timezone),
+                            "%Y-%m-%d %H:%M"
+                        )
                         
-                        data["created_date"] = (sale_order.create_date).strftime("%Y-%m-%d %H:%M")
+                        data["created_date"] = creation_date
+                        data["created_by"] = sale_order.create_uid.name
                         data["subtotal"] = sale_order.amount_untaxed
                         data["tax_amount"] = sale_order.amount_tax
                         data["total_amount"] = sale_order.amount_total
+                        data["invoicing_status"] = sale_order.invoice_status
+                        data["invoice"] = [{"id": invoice.id, "name": invoice.name, "stage": invoice.state} for invoice in sale_order.invoice_ids] if sale_order.invoice_ids else []
+                        data["currency"] = {"id": sale_order.currency_id.id, "name": sale_order.currency_id.name} if sale_order.currency_id else {}
                         data["analytic_account"] = {"id": sale_order.analytic_account_id.id, "name": sale_order.analytic_account_id.name} if sale_order.analytic_account_id else {}
                         data["journal"] = {"id": sale_order.journal_id.id, "name": sale_order.journal_id.name} if sale_order.journal_id else {}
                         data["courier"] = {"id": sale_order.custom_courier_id.id, "name": sale_order.custom_courier_id.name} if sale_order.custom_courier_id else {}
@@ -427,11 +457,13 @@ class NaidashSaleOrder(models.Model):
                         
                         data["line_items"] = [
                             {
-                                "id": item.id, 
+                                "id": item.id,
                                 "description": item.name,
                                 "quantity": item.product_uom_qty,
+                                "invoiced_quantity": item.qty_invoiced,
                                 "unit_price": item.price_unit,
-                                "subtotal": item.price_subtotal,                            
+                                "subtotal": item.price_subtotal,
+                                "total": item.price_total,
                                 "tax": {"id": item.tax_id.id, "name": item.tax_id.name} if item.tax_id else {},
                                 "courier_line": {"id": item.courier_line_id.id, "name": item.courier_line_id.name} if item.courier_line_id else {},
                                 "product": {"id": item.product_id.id, "name": item.product_id.name} if item.product_id else {}
@@ -445,7 +477,7 @@ class NaidashSaleOrder(models.Model):
                     response_data["data"] = all_sales_orders
                 else:
                     response_data["code"] = 404
-                    response_data["message"] = "Sales Order Not Found!"
+                    response_data["message"] = "Sales order not found!"
             else:
                 active_sales_orders = self.env['sale.order'].search(search_criteria, order='id asc')
                 
@@ -463,14 +495,10 @@ class NaidashSaleOrder(models.Model):
                         data["quotation_date"] = ""
                         data["delivery_date"] = ""
                         
-                        # Display the delivery time using the assigned user's local timezone
-                        assigned_user_timezone = active_sale_order.user_id.tz or pytz.utc
-                        assigned_user_timezone = pytz.timezone(assigned_user_timezone)
-                        
                         if active_sale_order.commitment_date:
                             delivery_date = (active_sale_order.commitment_date).strftime("%Y-%m-%d %H:%M")
                             delivery_date = datetime.strftime(
-                                pytz.utc.localize(datetime.strptime(delivery_date, "%Y-%m-%d %H:%M")).astimezone(assigned_user_timezone),
+                                pytz.utc.localize(datetime.strptime(delivery_date, "%Y-%m-%d %H:%M")).astimezone(user_timezone),
                                 "%Y-%m-%d %H:%M"
                             )
                             
@@ -479,15 +507,26 @@ class NaidashSaleOrder(models.Model):
                         if active_sale_order.date_order:
                             quotation_date = (active_sale_order.date_order).strftime("%Y-%m-%d %H:%M")
                             quotation_date = datetime.strftime(
-                                pytz.utc.localize(datetime.strptime(quotation_date, "%Y-%m-%d %H:%M")).astimezone(assigned_user_timezone),
+                                pytz.utc.localize(datetime.strptime(quotation_date, "%Y-%m-%d %H:%M")).astimezone(user_timezone),
                                 "%Y-%m-%d %H:%M"
                             )
                             
                             data["quotation_date"] = quotation_date
                                                 
+                        creation_date = (active_sale_order.create_date).strftime("%Y-%m-%d %H:%M")
+                        creation_date = datetime.strftime(
+                            pytz.utc.localize(datetime.strptime(creation_date, "%Y-%m-%d %H:%M")).astimezone(user_timezone),
+                            "%Y-%m-%d %H:%M"
+                        )
+                        
+                        data["created_date"] = creation_date
+                        data["created_by"] = active_sale_order.create_uid.name
                         data["subtotal"] = active_sale_order.amount_untaxed
                         data["tax_amount"] = active_sale_order.amount_tax
                         data["total_amount"] = active_sale_order.amount_total
+                        data["invoicing_status"] = sale_order.invoice_status
+                        data["invoice"] = [{"id": invoice.id, "name": invoice.name, "stage": invoice.state} for invoice in active_sale_order.invoice_ids] if active_sale_order.invoice_ids else []
+                        data["currency"] = {"id": active_sale_order.currency_id.id, "name": active_sale_order.currency_id.name} if active_sale_order.currency_id else {}
                         data["courier"] = {"id": active_sale_order.custom_courier_id.id, "name": active_sale_order.custom_courier_id.name} if active_sale_order.custom_courier_id else {}
                         data["sales_person"] = {"id": active_sale_order.user_id.id, "name": active_sale_order.user_id.name} if active_sale_order.user_id else {}
                         data["payment_terms"] = {"id": active_sale_order.payment_term_id.id, "name": active_sale_order.payment_term_id.name} if active_sale_order.payment_term_id else {}                    
@@ -504,11 +543,13 @@ class NaidashSaleOrder(models.Model):
                         
                         data["line_items"] = [
                             {
-                                "id": item.id, 
+                                "id": item.id,
                                 "description": item.name,
                                 "quantity": item.product_uom_qty,
+                                "invoiced_quantity": item.qty_invoiced,
                                 "unit_price": item.price_unit,
-                                "subtotal": item.price_subtotal,                            
+                                "subtotal": item.price_subtotal,
+                                "total": item.price_total
                             } for item in active_sale_order.order_line
                         ] if active_sale_order.order_line else []
                                             
@@ -560,7 +601,7 @@ class NaidashSaleOrder(models.Model):
 
                     if confirmed_sale_order:
                         response_data["code"] = 200
-                        response_data["message"] = "Sale order confirmed"
+                        response_data["message"] = "Sales order confirmed"
 
                     # Context key 'default_name' is sometimes propagated up to here.
                     # We don't need it and it creates issues in the creation of linked records.
@@ -571,16 +612,13 @@ class NaidashSaleOrder(models.Model):
 
                     sale_order.filtered(lambda so: so._should_be_locked()).action_lock()
                     
-                    courier = self.env['courier.custom'].move_to_next_stage(sale_order.custom_courier_id.id)
-                    status_code = courier.get("code")
-                    if status_code == 200:                                     
-                        response_data["code"] = status_code
-                        response_data["message"] = "Sale order confirmed & courier request " + courier.get("message")
-                    else:
-                        return courier
+                    courier_stage_update = self.env['courier.custom'].move_to_next_stage(sale_order.custom_courier_id.id)
+                    status_code = courier_stage_update.get("code")
+                    if status_code == 200:
+                        response_data["message"] = response_data["message"] + " successfully"
                 else:
                     response_data["code"] = 404
-                    response_data["message"] = "Sale order not found!"
+                    response_data["message"] = "Sales order not found!"
             else:
                 response_data["code"] = 403               
                 response_data["message"] = f"{self.env.user.name}, This action is forbidden!"
@@ -630,4 +668,4 @@ class NaidashSaleOrder(models.Model):
             return response_data
         except Exception as e:
             logger.error(f"The following error ocurred while cancelling the sales order:\n\n{str(e)}")
-            raise e        
+            raise e

@@ -739,7 +739,7 @@ class NaidashCourier(models.Model):
                             "volumetric_weight_cost": item.volumetric_weight_cost,
                             "subtotal": item.courier_subtotal,
                             "dimension": {"id": item.box_id.id, "name": item.box_id.name} if item.box_id else {},
-                            "product": {"id": item.product_id.id, "name": item.product_id.name} if item.product_id else {}
+                            "product": {"id": item.product_id.id, "name": item.product_id.name, "code": item.product_id.default_code or ""} if item.product_id else {}
                         } for item in courier.courier_line_ids
                     ] if courier.courier_line_ids else []
                     
@@ -833,7 +833,7 @@ class NaidashCourier(models.Model):
                             "volumetric_weight_cost": item.volumetric_weight_cost,
                             "subtotal": item.courier_subtotal,
                             "dimension": {"id": item.box_id.id, "name": item.box_id.name} if item.box_id else {},
-                            "product": {"id": item.product_id.id, "name": item.product_id.name} if item.product_id else {}
+                            "product": {"id": item.product_id.id, "name": item.product_id.name, "code": item.product_id.default_code or ""} if item.product_id else {}
                         } for item in active_courier.courier_line_ids
                     ] if active_courier.courier_line_ids else []                 
                     
@@ -989,7 +989,7 @@ class NaidashCourier(models.Model):
                                 "volumetric_weight_cost": item.volumetric_weight_cost,
                                 "subtotal": item.courier_subtotal,
                                 "dimension": {"id": item.box_id.id, "name": item.box_id.name} if item.box_id else {},
-                                "product": {"id": item.product_id.id, "name": item.product_id.name} if item.product_id else {}
+                                "product": {"id": item.product_id.id, "name": item.product_id.name, "code": item.product_id.default_code or ""} if item.product_id else {}
                             } for item in courier.courier_line_ids
                         ] if courier.courier_line_ids else []
                         
@@ -1083,7 +1083,7 @@ class NaidashCourier(models.Model):
                                 "volumetric_weight_cost": item.volumetric_weight_cost,
                                 "subtotal": item.courier_subtotal,
                                 "dimension": {"id": item.box_id.id, "name": item.box_id.name} if item.box_id else {},
-                                "product": {"id": item.product_id.id, "name": item.product_id.name} if item.product_id else {}
+                                "product": {"id": item.product_id.id, "name": item.product_id.name, "code": item.product_id.default_code or ""} if item.product_id else {}
                             } for item in active_courier.courier_line_ids
                         ] if active_courier.courier_line_ids else []
                                             

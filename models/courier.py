@@ -371,7 +371,7 @@ class NaidashCourier(models.Model):
                         [
                             ('name', '=', 'Courier Service'),
                             ('default_code', '=', 'CS1'),
-                        ], order="id desc", limit=1
+                        ], order="id asc", limit=1
                     ).id
                     
                     if product:
@@ -381,7 +381,7 @@ class NaidashCourier(models.Model):
                                 "name": item.get("name"),
                                 "qty": int(item.get("quantity")) if item.get("quantity") else 1,
                                 "weight": float(item.get("weight")) if item.get("weight") else 0.0,
-                                "box_id": int(item.get("dimension_id")) if item.get("dimension_id") else False
+                                "box_id": False if not item.get("dimension_id") else int(item.get("dimension_id"))
                             }
                             
                             items_to_transport.append((0, 0, courier_items))
@@ -389,7 +389,7 @@ class NaidashCourier(models.Model):
                         vals["courier_line_ids"] = items_to_transport
                     else:
                         response_data["code"] = 404
-                        response_data["message"] = "Courier Service Product Not Found!"
+                        response_data["message"] = "Setup the `Courier Service` product"
                         return response_data
                     
                 # Create courier request
@@ -568,29 +568,59 @@ class NaidashCourier(models.Model):
                             response_data["code"] = 404
                             response_data["message"] = "Tag Not Found!"
                             return response_data
-                        
-                    if line_items not in search_param_values:                            
-                        for item in line_items:
-                            courier_items = dict()
-                            
-                            if item.get("product_id") not in search_param_values:
-                                courier_items["product_id"] = int(item.get("product_id"))
-                            if item.get("name") not in search_param_values:
-                                courier_items["name"] = item.get("name")
-                            if item.get("quantity") not in search_param_values:
-                                courier_items["qty"] = int(item.get("quantity"))
-                            if item.get("weight") not in search_param_values:
-                                courier_items["weight"] = float(item.get("weight"))
-                            if item.get("dimension_id") not in search_param_values:
-                                courier_items["box_id"] = int(item.get("dimension_id"))
-                            
-                            # Check if there are any values to be updated in the line items
-                            if courier_items:
-                                items_to_transport.append((1, int(item.get("id")), courier_items))
-                            
-                        if items_to_transport:
-                            courier_details["courier_line_ids"] = items_to_transport
-                        
+                     
+                    product = self.env['product.product'].search(
+                        [
+                            ('name', '=', 'Courier Service'),
+                            ('default_code', '=', 'CS1'),
+                        ], order="id asc", limit=1
+                    ).id
+                    
+                    if product:
+                        if line_items not in search_param_values:                            
+                            for item in line_items:
+                                if item.get("id"):
+                                    update_courier_item_vals = dict()
+                                    
+                                    if item.get("product_id") not in search_param_values:
+                                        update_courier_item_vals["product_id"] = int(item.get("product_id"))
+                                    if item.get("name") not in search_param_values:
+                                        update_courier_item_vals["name"] = item.get("name")
+                                    if item.get("quantity") not in search_param_values:
+                                        update_courier_item_vals["qty"] = int(item.get("quantity"))
+                                    if item.get("weight") not in search_param_values:
+                                        update_courier_item_vals["weight"] = float(item.get("weight"))
+                                    if item.get("dimension_id") not in search_param_values:
+                                        update_courier_item_vals["box_id"] = int(item.get("dimension_id"))
+                                      
+                                    item_id = item.get("id")    
+                                    
+                                    # Check if there are any courier line items to be deleted/removed
+                                    if item.get("delete_record") == True:
+                                        items_to_transport.append((2, int(item_id)))
+                                    
+                                    # Check if there are any courier line items to be updated
+                                    if item.get("delete_record") == False and update_courier_item_vals:
+                                        items_to_transport.append((1, int(item_id), update_courier_item_vals))
+                                else:
+                                    create_courier_item_vals = {
+                                        "product_id": product,
+                                        "name": item.get("name"),
+                                        "qty": int(item.get("quantity")) if item.get("quantity") else 1,
+                                        "weight": float(item.get("weight")) if item.get("weight") else 0.0,
+                                        "box_id": False if not item.get("dimension_id") else int(item.get("dimension_id"))
+                                    }
+                                                                        
+                                    # Create the Courier line items
+                                    items_to_transport.append((0, 0, create_courier_item_vals))                                
+                                
+                            if items_to_transport:
+                                courier_details["courier_line_ids"] = items_to_transport
+                    else:
+                        response_data["code"] = 404
+                        response_data["message"] = "Setup the `Courier Service` product"
+                        return response_data
+                                            
                     # Update courier details
                     if courier_details:                        
                         courier.write(courier_details)
@@ -737,6 +767,7 @@ class NaidashCourier(models.Model):
                             "volumetric_weight": item.volumetric_weight,
                             "total_volumetric_weight": item.total_volumetric_weight,
                             "volumetric_weight_cost": item.volumetric_weight_cost,
+                            "delete_record": False,
                             "subtotal": item.courier_subtotal,
                             "dimension": {"id": item.box_id.id, "name": item.box_id.name} if item.box_id else {},
                             "product": {"id": item.product_id.id, "name": item.product_id.name, "code": item.product_id.default_code or ""} if item.product_id else {}
@@ -832,6 +863,7 @@ class NaidashCourier(models.Model):
                             "total_volumetric_weight": item.total_volumetric_weight,
                             "volumetric_weight_cost": item.volumetric_weight_cost,
                             "subtotal": item.courier_subtotal,
+                            "delete_record": False,
                             "dimension": {"id": item.box_id.id, "name": item.box_id.name} if item.box_id else {},
                             "product": {"id": item.product_id.id, "name": item.product_id.name, "code": item.product_id.default_code or ""} if item.product_id else {}
                         } for item in active_courier.courier_line_ids
@@ -988,6 +1020,7 @@ class NaidashCourier(models.Model):
                                 "total_volumetric_weight": item.total_volumetric_weight,
                                 "volumetric_weight_cost": item.volumetric_weight_cost,
                                 "subtotal": item.courier_subtotal,
+                                "delete_record": False,
                                 "dimension": {"id": item.box_id.id, "name": item.box_id.name} if item.box_id else {},
                                 "product": {"id": item.product_id.id, "name": item.product_id.name, "code": item.product_id.default_code or ""} if item.product_id else {}
                             } for item in courier.courier_line_ids
@@ -1082,6 +1115,7 @@ class NaidashCourier(models.Model):
                                 "total_volumetric_weight": item.total_volumetric_weight,
                                 "volumetric_weight_cost": item.volumetric_weight_cost,
                                 "subtotal": item.courier_subtotal,
+                                "delete_record": False,
                                 "dimension": {"id": item.box_id.id, "name": item.box_id.name} if item.box_id else {},
                                 "product": {"id": item.product_id.id, "name": item.product_id.name, "code": item.product_id.default_code or ""} if item.product_id else {}
                             } for item in active_courier.courier_line_ids

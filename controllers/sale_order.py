@@ -234,3 +234,42 @@ class NaidashSalesOrder(http.Controller):
             )
             
             return request.make_response(data, headers, status=500)
+        
+    @route('/api/v1/naidash/sale/<int:sale_id>/draft', methods=['GET'], auth='user', type='http')
+    def reset_the_sales_order(self, sale_id):
+        """Reset the sales order to draft
+        """      
+                
+        headers = [('Content-Type', 'application/json')]                
+        try:
+            sale_order_details = request.env['sale.order'].reset_the_sales_order_to_draft(sale_id)
+            status_code = sale_order_details.get("code")
+            
+            if status_code != 200:
+                data = json.dumps(
+                    {
+                        "error": sale_order_details
+                    }
+                )
+
+                return request.make_response(data, headers, status=status_code)                 
+            else:
+                data = json.dumps(
+                    {
+                        "result": sale_order_details
+                    }
+                )
+
+                return request.make_response(data, headers, status=status_code)
+        except Exception as e:
+            logger.exception(f"The following error occurred while resetting the sales order:\n\n{str(e)}")
+            data = json.dumps(
+                {
+                    "error": {
+                        "code": 500,
+                        "message": str(e)
+                    }
+                }
+            )
+            
+            return request.make_response(data, headers, status=500)

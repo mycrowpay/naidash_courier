@@ -649,8 +649,8 @@ class NaidashSalesOrder(models.Model):
                         response_data["message"] = f"{self.env.user.name}, You cannot cancel a locked sales order.Please unlock it first"
                         return response_data
                     
-                    can_be_cancelled = sale_order._show_cancel_wizard()
-                    if can_be_cancelled:
+                    cant_be_cancelled = sale_order._show_cancel_wizard()
+                    if cant_be_cancelled:
                         response_data["code"] = 403
                         response_data["message"] = f"Sales order {sale_order.name} cannot be cancelled"
                     else:
@@ -668,4 +668,42 @@ class NaidashSalesOrder(models.Model):
             return response_data
         except Exception as e:
             logger.error(f"The following error ocurred while cancelling the sales order:\n\n{str(e)}")
+            raise e
+        
+    def reset_the_sales_order_to_draft(self, sale_order_id):
+        """ Reset the sales order to `draft` status
+        """
+        
+        try:
+            response_data = dict()
+            is_courier_manager = self.env.user.has_group('courier_manage.courier_management_manager_custom_group')
+            
+            # Courier Admins/Managers can reset a sales order to draft status
+            if is_courier_manager:
+                sale_order = self.env['sale.order'].search(
+                    [
+                        ('id','=', int(sale_order_id))
+                    ]
+                )
+                
+                if sale_order:
+                    if sale_order.state != "cancel":
+                        response_data["code"] = 403
+                        response_data["message"] = f"Sales order {sale_order.name} cannot be set to draft"
+                        return response_data
+                    else:
+                        reset_sales_order = sale_order.action_draft()
+                                        
+                        if reset_sales_order:
+                            response_data["code"] = 200
+                            response_data["message"] = f"Sales order {sale_order.name} has been set to draft"
+                else:
+                    response_data["code"] = 404
+                    response_data["message"] = "Sales order not found!"                            
+            else:
+                response_data["code"] = 403
+                response_data["message"] = f"{self.env.user.name}, This action is forbidden!"
+            return response_data
+        except Exception as e:
+            logger.error(f"The following error ocurred while resetting the sales order to draft:\n\n{str(e)}")
             raise e

@@ -44,6 +44,39 @@ class NaidashInvoice(models.Model):
                     invoice = sales_order._create_invoices()    
                     
                     if invoice:
+                        try:
+                            invoice_template_id = self.env['wk.sms.template'].search([('model', '=', 'account.move')], order="id desc", limit=1).id
+                            
+                            if invoice_template_id:
+                                wk_sms = self.env["wk.sms.sms"]
+                                create_sms = wk_sms.create_the_sms(
+                                    {
+                                        "template_id": invoice_template_id,
+                                        "record_id": invoice.id,
+                                        "partner_ids": [invoice.partner_id.id]
+                                    }
+                                )
+                                
+                                sms_id = int(create_sms.get("data").get("id"))
+                                
+                                if sms_id:                                        
+                                    sms_response = wk_sms.send_the_sms(sms_id)
+                                    logger.info(f"SMS info:\n\n{sms_response}")
+                            else:
+                                response_data["code"] = 404
+                                response_data["message"] = "Template not found"
+                        except MissingError as e:
+                            logger.error(f"MissingError ocurred while sending the SMS:\n\n{str(e)}")
+                            msg = _("Record does not exist")
+                            raise MissingError(msg)
+                        except UserError as e:
+                            logger.error(f"UserError ocurred while sending the SMS:\n\n{str(e)}")
+                            raise e
+                        except Exception:
+                            logger.exception(f"Exception ocurred while sending the SMS:\n\n{str(e)}")
+                            msg = _("Install the `SMS` module")
+                            raise ValidationError(msg)
+                                                    
                         data['id'] = invoice.id
                         response_data["code"] = 201
                         response_data["message"] = "Invoice created successfully"

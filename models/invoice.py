@@ -2,6 +2,7 @@ import logging
 import pytz
 import base64
 import re
+from werkzeug import urls
 
 from datetime import datetime, date, timedelta
 from odoo import models, fields, api, SUPERUSER_ID, _
@@ -505,7 +506,39 @@ class NaidashInvoice(models.Model):
                 )
                 
                 if invoice:
-                    invoice.action_post()
+                    post_invoice = invoice.action_post()
+
+                    payment_link = nautils.generate_payment_link(invoice.partner_id, invoice.amount_residual, invoice.currency_id.name, invoice.ref)
+                    if payment_link:
+                        try:
+                            invoice_template_id = self.env.ref('naidash_sms.sms_template_for_posted_invoice', raise_if_not_found=True).id
+                            
+                            wk_sms = self.env["wk.sms.sms"]                            
+                            create_sms = wk_sms.create_the_sms(
+                                {
+                                    "group_type": "multiple",
+                                    "template_id": invoice_template_id,
+                                    "record_id": invoice.id,
+                                    "partner_ids": [invoice.partner_id.id]
+                                }
+                            )
+                            
+                            sms_id = int(create_sms.get("data").get("id"))
+                            
+                            if sms_id:                                        
+                                sms_response = wk_sms.send_the_sms(sms_id)
+                                logger.info(f"SMS info:\n\n{sms_response}")
+                        except MissingError as e:
+                            logger.error(f"MissingError ocurred while sending the SMS:\n\n{str(e)}")
+                            msg = _("Record does not exist")
+                            raise MissingError(msg)
+                        except UserError as e:
+                            logger.error(f"UserError ocurred while sending the SMS:\n\n{str(e)}")
+                            raise e
+                        except Exception as e:
+                            logger.exception(f"Exception error ocurred while sending the SMS:\n\n{str(e)}")
+                            raise e
+                        
                     response_data["code"] = 200
                     response_data["message"] = "Invoice confirmed"
                 

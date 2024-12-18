@@ -23,6 +23,18 @@ class NaidashStage(models.Model):
         string = "Is This The Cancellation Stage?",
         default = False,
         help="If set to true, this stage will be considered as the cancellation step in the pipeline"
+    )
+    
+    template_id = fields.Many2one('wk.sms.template', string="Template")
+    
+    notification_type = fields.Selection(
+        [
+            ('none', 'None'),
+            ('sms','SMS'),
+            ('email','Email'),
+            ('sms_email','SMS & Email')
+        ],
+        string = "Notification Type", default="none"
     )    
 
     def create_stage(self, request_data):
@@ -41,6 +53,8 @@ class NaidashStage(models.Model):
                 allow_sales_order_creation = request_data.get("allow_sales_order_creation", False)
                 is_last_stage = request_data.get("is_last_stage", False)
                 is_cancel_stage = request_data.get("is_cancel_stage", False)
+                template_id = request_data.get("template_id")
+                notification_type = request_data.get("notification_type")
                 
                 vals = {
                     "name": stage_name,
@@ -48,7 +62,9 @@ class NaidashStage(models.Model):
                     "is_form_readonly": is_form_readonly,
                     "is_saleorder": allow_sales_order_creation,
                     "is_last_stage": is_last_stage,
-                    "is_cancel_stage": is_cancel_stage
+                    "is_cancel_stage": is_cancel_stage,
+                    "template_id": int(template_id) if template_id else False,
+                    "notification_type": notification_type
                 }
 
                 stage = self.env['courier.stage.custom'].create(vals)
@@ -110,6 +126,12 @@ class NaidashStage(models.Model):
                         
                     if request_data.get("is_cancel_stage") not in search_param_values:
                         stage_details["is_cancel_stage"] = request_data.get("is_cancel_stage")
+                    
+                    if request_data.get("template_id") not in search_param_values:
+                        stage_details["template_id"] = int(request_data.get("template_id"))
+                    
+                    if request_data.get("notification_type") not in search_param_values:
+                        stage_details["notification_type"] = request_data.get("notification_type")
                         
                     # Update stage details
                     if stage_details:
@@ -163,6 +185,8 @@ class NaidashStage(models.Model):
                     data["activate_stage"] = stage.active
                     data["is_last_stage"] = stage.is_last_stage
                     data["is_cancel_stage"] = stage.is_cancel_stage
+                    data["notification_type"] = stage.notification_type
+                    data["template"] = {"id": stage.template_id.id, "name": stage.template_id.name} if stage.template_id else {}
                     
                     response_data["code"] = 200
                     response_data["message"] = "Success"
@@ -217,6 +241,8 @@ class NaidashStage(models.Model):
                         data["activate_stage"] = stage.active
                         data["is_last_stage"] = stage.is_last_stage
                         data["is_cancel_stage"] = stage.is_cancel_stage
+                        data["notification_type"] = stage.notification_type
+                        data["template"] = {"id": stage.template_id.id, "name": stage.template_id.name} if stage.template_id else {}
                         
                         all_stages.append(data)
                     

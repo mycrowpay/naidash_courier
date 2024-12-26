@@ -8,6 +8,8 @@ from werkzeug import urls
 
 from odoo.http import request, content_disposition, route, Response
 from odoo.addons.payment import utils as payment_utils
+from odoo import models, fields, api, SUPERUSER_ID, _
+from odoo.exceptions import ValidationError, UserError, AccessError, AccessDenied, MissingError
 
 logger = logging.getLogger(__name__)
 
@@ -96,3 +98,36 @@ class NaidashUtils:
         except Exception as e:
             logger.exception(f"The following error occurred while verifying the payment token:\n\n{str(e)}")
             raise e
+        
+    def send_sms_using_template(self, template_id, record_id, partner_ids):
+        """
+        Sends an SMS to partner(s).This method works well  
+        with templates that have models associated with them
+        """
+        try:
+            wk_sms = request.env["wk.sms.sms"]
+            create_sms = wk_sms.create_the_sms(
+                {
+                    "group_type": "multiple",
+                    "template_id": template_id,
+                    "record_id": record_id,
+                    "partner_ids": partner_ids
+                }
+            )
+            
+            sms_id = int(create_sms.get("data").get("id"))
+            
+            if sms_id:
+                sms_response = wk_sms.send_the_sms(sms_id)
+                logger.info(f"SMS info:\n\n{sms_response}")
+        except MissingError as e:
+            logger.error(f"MissingError ocurred while sending the SMS:\n\n{str(e)}")
+            msg = _("Record does not exist")
+            raise MissingError(msg)
+        except UserError as e:
+            logger.error(f"UserError ocurred while sending the SMS:\n\n{str(e)}")
+            raise e
+        except Exception as e:
+            logger.exception(f"Exception error ocurred while sending the SMS:\n\n{str(e)}")
+            raise e
+        

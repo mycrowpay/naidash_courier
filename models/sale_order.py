@@ -573,6 +573,8 @@ class NaidashSalesOrder(models.Model):
         
         try:
             response_data = dict()
+            logged_in_user = self.env.user
+            first_name = (logged_in_user.name).partition(" ")[0]
             is_courier_manager = self.env.user.has_group('courier_manage.courier_management_manager_custom_group')
             
             # Courier Admins/Managers can confirm a sale order
@@ -610,10 +612,30 @@ class NaidashSalesOrder(models.Model):
 
                     sale_order.with_context(context)._action_confirm()
 
+                    # Locks a confirmed sales order. Prevents editing
                     sale_order.filtered(lambda so: so._should_be_locked()).action_lock()
+                    
+                    # Unlocks a confirmed sales order. Allows editing/cancellation
+                    # sale_order.action_unlock()
                     
                     courier_stage_update = self.env['courier.custom'].move_to_next_stage(sale_order.custom_courier_id.id)
                     status_code = courier_stage_update.get("code")
+                    
+                    try:
+                        next_stage = sale_order.custom_courier_id.stage_id
+                        partner_ids = [sale_order.partner_id.id]
+                        
+                        if next_stage.notification_type == "sms":
+                            sale_order_template_id = self.env.ref('naidash_sms.sms_template_for_confirmed_sales_order', raise_if_not_found=True).id
+                            if sale_order_template_id:
+                                nautils.send_sms_using_template(sale_order_template_id, sale_order.id, partner_ids)
+                        elif next_stage.notification_type == "email":
+                            # Send email to the partner
+                            pass
+                    except Exception as e:
+                        logger.exception(f"Exception error ocurred while sending the SMS:\n\n{str(e)}")
+                        raise e
+                    
                     if status_code == 200:
                         response_data["message"] = response_data["message"] + " successfully"
                 else:
@@ -621,7 +643,7 @@ class NaidashSalesOrder(models.Model):
                     response_data["message"] = "Sales order not found!"
             else:
                 response_data["code"] = 403               
-                response_data["message"] = f"{self.env.user.name}, This action is forbidden!"
+                response_data["message"] = f"{first_name}, You are not authorized to perform this action!"
             return response_data
         except Exception as e:
             logger.error(f"The following error ocurred while confirming the sales order details:\n\n{str(e)}")
@@ -633,6 +655,8 @@ class NaidashSalesOrder(models.Model):
         
         try:
             response_data = dict()
+            logged_in_user = self.env.user
+            first_name = (logged_in_user.name).partition(" ")[0]
             is_courier_manager = self.env.user.has_group('courier_manage.courier_management_manager_custom_group')
             
             # Courier Admins/Managers can cancel a sales order
@@ -664,7 +688,7 @@ class NaidashSalesOrder(models.Model):
                     response_data["message"] = "Sales order not found!"                            
             else:
                 response_data["code"] = 403
-                response_data["message"] = f"{self.env.user.name}, This action is forbidden!"
+                response_data["message"] = f"{first_name}, You are not authorized to perform this action!"
             return response_data
         except Exception as e:
             logger.error(f"The following error ocurred while cancelling the sales order:\n\n{str(e)}")
@@ -676,6 +700,8 @@ class NaidashSalesOrder(models.Model):
         
         try:
             response_data = dict()
+            logged_in_user = self.env.user
+            first_name = (logged_in_user.name).partition(" ")[0]
             is_courier_manager = self.env.user.has_group('courier_manage.courier_management_manager_custom_group')
             
             # Courier Admins/Managers can reset a sales order to draft status
@@ -702,7 +728,7 @@ class NaidashSalesOrder(models.Model):
                     response_data["message"] = "Sales order not found!"                            
             else:
                 response_data["code"] = 403
-                response_data["message"] = f"{self.env.user.name}, This action is forbidden!"
+                response_data["message"] = f"{first_name}, You are not authorized to perform this action!"
             return response_data
         except Exception as e:
             logger.error(f"The following error ocurred while resetting the sales order to draft:\n\n{str(e)}")

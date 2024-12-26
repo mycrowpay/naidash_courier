@@ -4,9 +4,10 @@ from odoo.http import request, route
 from datetime import datetime
 import json
 import logging
-
+from ..models.utils import NaidashUtils
 
 logger = logging.getLogger(__name__)
+nautils = NaidashUtils()
 
 class NaidashCourier(http.Controller):
     @route('/api/v1/naidash/courier', methods=['POST'], auth='user', type='json')
@@ -172,6 +173,182 @@ class NaidashCourier(http.Controller):
                     "error": {
                         "code": 500,
                         "message": str(e)}
+                }
+            )
+            
+            return request.make_response(data, headers, status=500)
+        
+    @route('/api/v1/courier/<int:courier_id>/next', methods=['GET'], auth='user', type='http')
+    def move_courier_to_next_stage(self, courier_id):
+        """Moves a courier request to the next stage
+        """ 
+                
+        headers = [('Content-Type', 'application/json')]
+                
+        try:
+            partner_ids = list()
+            courier_details = request.env['courier.custom'].move_to_next_stage(courier_id)
+            status_code = courier_details.get("code")
+
+            courier = request.env['courier.custom'].search(
+                [
+                    ('id', '=', int(courier_id))
+                ]
+            )
+                            
+            try:
+                if courier.stage_id.person_to_notify == "sender":
+                    partner_ids = [courier.sender_name_id.id]
+                elif courier.stage_id.person_to_notify == "receiver":
+                    partner_ids = [courier.receiver_name_id.id]
+                elif courier.stage_id.person_to_notify == "both":
+                    partner_ids = [courier.sender_name_id.id, courier.receiver_name_id.id]
+                                    
+                if courier.stage_id.notification_type == "sms":
+                    courier_template_id = courier.stage_id.template_id
+                    if courier_template_id and partner_ids:
+                        nautils.send_sms_using_template(courier_template_id.id, courier.id, partner_ids)
+                    else:
+                        data = json.dumps(
+                            {
+                                "error": {
+                                    "code": 404,
+                                    "message": "Template or partner not found"
+                                }
+                            }
+                        )
+                        
+                        return request.make_response(data, headers, status=500)
+                elif courier.stage_id.notification_type == "email":
+                    # Send email to the partner
+                    pass
+            except Exception as e:
+                logger.exception(f"Exception error ocurred while sending the SMS:\n\n{str(e)}")
+                if "HTTPSConnectionPool" in str(e):
+                    data = json.dumps(
+                        {
+                            "error": {
+                                "code": 500,
+                                "message": "Check your internet connection"
+                            }
+                        }
+                    )                    
+                else:
+                    data = json.dumps(
+                    {
+                        "error": {
+                            "code": 500,
+                            "message": str(e)
+                        }
+                    }
+                )
+                
+                return request.make_response(data, headers, status=500)
+            
+            if status_code == 403 or status_code == 404:
+                data = json.dumps(
+                    {
+                        "error": courier_details
+                    }
+                )
+
+                return request.make_response(data, headers, status=status_code)                 
+            else:
+                data = json.dumps(
+                    {
+                        "result": courier_details
+                    }
+                )
+
+                return request.make_response(data, headers, status=status_code)
+        except Exception as e:
+            logger.exception(f"The following error occurred while moving the courier request to the next stage:\n\n{str(e)}")
+            data = json.dumps(
+                {
+                    "error": {
+                        "code": 500,
+                        "message": str(e)
+                    }
+                }
+            )
+            
+            return request.make_response(data, headers, status=500)
+        
+    @route('/api/v1/courier/<int:courier_id>/previous', methods=['GET'], auth='user', type='http')
+    def move_courier_to_previous_stage(self, courier_id):
+        """Moves a courier request to the previous stage
+        """ 
+                
+        headers = [('Content-Type', 'application/json')]
+                
+        try:
+            courier_details = request.env['courier.custom'].move_to_previous_stage(courier_id)
+            status_code = courier_details.get("code")
+            
+            if status_code == 403 or status_code == 404:
+                data = json.dumps(
+                    {
+                        "error": courier_details
+                    }
+                )
+
+                return request.make_response(data, headers, status=status_code)                 
+            else:
+                data = json.dumps(
+                    {
+                        "result": courier_details
+                    }
+                )
+
+                return request.make_response(data, headers, status=status_code)
+        except Exception as e:
+            logger.exception(f"The following error occurred while moving the courier request to the previous stage:\n\n{str(e)}")
+            data = json.dumps(
+                {
+                    "error": {
+                        "code": 500,
+                        "message": str(e)
+                    }
+                }
+            )
+            
+            return request.make_response(data, headers, status=500)
+        
+    @route('/api/v1/courier/<int:courier_id>/cancel', methods=['GET'], auth='user', type='http')
+    def move_courier_to_cancel_stage(self, courier_id):
+        """Moves a courier request to the cancellation stage
+        """ 
+                
+        headers = [('Content-Type', 'application/json')]
+                
+        try:
+            courier_details = request.env['courier.custom'].move_to_cancel_stage(courier_id)
+            status_code = courier_details.get("code")
+            
+            if status_code == 403 or status_code == 404:
+                data = json.dumps(
+                    {
+                        "error": courier_details
+                    }
+                )
+
+                return request.make_response(data, headers, status=status_code)                 
+            else:
+                data = json.dumps(
+                    {
+                        "result": courier_details
+                    }
+                )
+
+                return request.make_response(data, headers, status=status_code)
+        except Exception as e:
+            logger.exception(f"The following error occurred while moving the courier request to the cancellation stage:\n\n{str(e)}")
+            data = json.dumps(
+                {
+                    "error": {
+                        "code": 500,
+                        "message": str(e)
+                    }
                 }
             )
             

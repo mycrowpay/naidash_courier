@@ -32,10 +32,16 @@ class NaidashInvoice(Controller):
             }      
         except Exception as e:
             logger.exception(f"This error occurred while creating the invoice:\n\n{str(e)}")
-            return {                
-                "code": 500,
-                "message": str(e)
-            }
+            if "HTTPSConnectionPool" in str(e):
+                return {
+                    "code": 504,
+                    "message": "Check your internet connection"
+                }
+            else:
+                return {
+                    "code": 500,
+                    "message": str(e)
+                }
             
     @route('/api/v1/naidash/invoice/<int:invoice_id>', methods=['GET'], auth='user', type='http')
     def get_invoice(self, invoice_id):
@@ -178,7 +184,17 @@ class NaidashInvoice(Controller):
                 return request.make_response(data, headers, status=status_code)
         except Exception as e:
             logger.exception(f"The following error occurred while confirming the invoice:\n\n{str(e)}")
-            data = json.dumps(
+            if "HTTPSConnectionPool" in str(e):
+                data = json.dumps(
+                    {
+                        "error": {
+                            "code": 504,
+                            "message": "Check your internet connection"
+                        }
+                    }
+                )
+            else:
+                data = json.dumps(
                 {
                     "error": {
                         "code": 500,
@@ -186,7 +202,7 @@ class NaidashInvoice(Controller):
                     }
                 }
             )
-            
+                
             return request.make_response(data, headers, status=500)
         
     @route('/api/v1/naidash/invoice/<int:invoice_id>/cancel', methods=['GET'], auth='user', type='http')

@@ -32,10 +32,20 @@ class NaidashStage(models.Model):
             ('none', 'None'),
             ('sms','SMS'),
             ('email','Email'),
-            ('sms_email','SMS & Email')
+            ('both','SMS & Email')
         ],
         string = "Notification Type", default="none"
-    )    
+    )
+    
+    person_to_notify = fields.Selection(
+        [
+            ('none', 'None'),
+            ('sender','Sender'),
+            ('receiver','Receiver'),
+            ('both','Sender & Receiver')
+        ],
+        string = "Person To Notify", default="none"
+    )
 
     def create_stage(self, request_data):
         """Create the stage
@@ -44,6 +54,8 @@ class NaidashStage(models.Model):
         try:
             data = dict()
             response_data = dict()
+            logged_in_user = self.env.user
+            first_name = (logged_in_user.name).partition(" ")[0]
             is_courier_manager = self.env.user.has_group('courier_manage.courier_management_manager_custom_group')
             
             if is_courier_manager:            
@@ -55,6 +67,7 @@ class NaidashStage(models.Model):
                 is_cancel_stage = request_data.get("is_cancel_stage", False)
                 template_id = request_data.get("template_id")
                 notification_type = request_data.get("notification_type")
+                person_to_notify = request_data.get("person_to_notify")
                 
                 vals = {
                     "name": stage_name,
@@ -64,7 +77,8 @@ class NaidashStage(models.Model):
                     "is_last_stage": is_last_stage,
                     "is_cancel_stage": is_cancel_stage,
                     "template_id": int(template_id) if template_id else False,
-                    "notification_type": notification_type
+                    "notification_type": notification_type,
+                    "person_to_notify": person_to_notify
                 }
 
                 stage = self.env['courier.stage.custom'].create(vals)
@@ -76,7 +90,7 @@ class NaidashStage(models.Model):
                     response_data["data"] = data
             else:
                 response_data["code"] = 403               
-                response_data["message"] = f"{self.env.user.name}, You are not authorized to perform this action!"
+                response_data["message"] = f"{first_name}, You are not authorized to perform this action!"
             
             return response_data
         except Exception as e:
@@ -89,6 +103,8 @@ class NaidashStage(models.Model):
                 
         try:
             response_data = dict()
+            logged_in_user = self.env.user
+            first_name = (logged_in_user.name).partition(" ")[0]
             search_param_values = ["", None]
             is_courier_manager = self.env.user.has_group('courier_manage.courier_management_manager_custom_group')
             
@@ -133,6 +149,9 @@ class NaidashStage(models.Model):
                     if request_data.get("notification_type") not in search_param_values:
                         stage_details["notification_type"] = request_data.get("notification_type")
                         
+                    if request_data.get("person_to_notify") not in search_param_values:
+                        stage_details["person_to_notify"] = request_data.get("person_to_notify")
+                        
                     # Update stage details
                     if stage_details:
                         stage.write(stage_details)
@@ -146,7 +165,7 @@ class NaidashStage(models.Model):
                     response_data["message"] = "Stage Not Found!"                    
             else:
                 response_data["code"] = 403               
-                response_data["message"] = f"{self.env.user.name}, You are not authorized to perform this action!"
+                response_data["message"] = f"{first_name}, You are not authorized to perform this action!"
             
             return response_data        
         except TypeError as e:
@@ -186,6 +205,7 @@ class NaidashStage(models.Model):
                     data["is_last_stage"] = stage.is_last_stage
                     data["is_cancel_stage"] = stage.is_cancel_stage
                     data["notification_type"] = stage.notification_type
+                    data["person_to_notify"] = stage.person_to_notify
                     data["template"] = {"id": stage.template_id.id, "name": stage.template_id.name} if stage.template_id else {}
                     
                     response_data["code"] = 200
@@ -242,6 +262,7 @@ class NaidashStage(models.Model):
                         data["is_last_stage"] = stage.is_last_stage
                         data["is_cancel_stage"] = stage.is_cancel_stage
                         data["notification_type"] = stage.notification_type
+                        data["person_to_notify"] = stage.person_to_notify
                         data["template"] = {"id": stage.template_id.id, "name": stage.template_id.name} if stage.template_id else {}
                         
                         all_stages.append(data)

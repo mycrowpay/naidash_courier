@@ -5,9 +5,10 @@ from odoo import models, fields, api, _
 from odoo.http import request
 from odoo.exceptions import ValidationError, UserError
 
+from .utils import NaidashUtils
 
 logger = logging.getLogger(__name__)
-
+nautils = NaidashUtils()
 
 class NaidashCourier(models.Model):
     _inherit = "courier.custom"
@@ -145,7 +146,11 @@ class NaidashCourier(models.Model):
         string = "Company",
         related = "user_id.company_id",
         readonly = False
-    )    
+    )
+    
+    previous_stage_id = fields.Integer(
+        string = "Previous Stage ID"
+    )
     
     @api.model
     def create(self, vals):        
@@ -1138,7 +1143,8 @@ class NaidashCourier(models.Model):
     def move_to_next_stage(self, courier_id):
         """Moves a Courier request to the next stage"""
 
-        logged_in_user = self.env.user.id 
+        logged_in_user = self.env.user
+        first_name = (logged_in_user.name).partition(" ")[0]
         response_data = dict()
 
         try:
@@ -1163,15 +1169,16 @@ class NaidashCourier(models.Model):
                         )
 
                         if next_stage:
-                            courier.write({"stage_id": next_stage.id})
+                            courier.write({"previous_stage_id" : current_stage.id, "stage_id": next_stage.id})
+                            
                             response_data["code"] = 200
-                            response_data["message"] = f"successfully moved to {courier.stage_id.name}!"
+                            response_data["message"] = f"Successfully moved to {next_stage.name} stage!"
                         else:
                             response_data["code"] = 404
                             response_data["message"] = "Stage not found!"
                     else:
                         response_data["code"] = 403
-                        response_data["message"] = f"{self.env.user.name}, This action is forbidden!"
+                        response_data["message"] = f"{first_name}, This action is forbidden!"
                 else:
                     response_data["code"] = 404
                     response_data["message"] = "Courier not found!"
@@ -1179,14 +1186,14 @@ class NaidashCourier(models.Model):
                 active_courier = self.env['courier.custom'].search(
                     [
                         ('id', '=', int(courier_id)),
-                        ('user_id', '=', logged_in_user)
+                        ('user_id', '=', logged_in_user.id)
                     ]
                 )
                 
                 if active_courier:
                     current_stage = active_courier.stage_id
                     # Get the next stage if the current stage is neither marked as `last` nor `cancel`
-                    if active_courier.stage_id.is_last_stage == False or active_courier.stage_id.is_cancel_stage == False:
+                    if current_stage.is_last_stage == False or current_stage.is_cancel_stage == False:
                         next_stage = self.env['courier.stage.custom'].search(
                             [
                                 ('stage_sequence', '>', current_stage.stage_sequence)
@@ -1195,20 +1202,113 @@ class NaidashCourier(models.Model):
                         )
 
                         if next_stage:
-                            active_courier.write({"stage_id": next_stage.id})
+                            active_courier.write({"previous_stage_id" : current_stage.id, "stage_id": next_stage.id})
+                            
                             response_data["code"] = 200
-                            response_data["message"] = f"successfully moved to {active_courier.stage_id.name}!"
+                            response_data["message"] = f"Successfully moved to {next_stage.name} stage!"
                         else:
                             response_data["code"] = 404
                             response_data["message"] = "Stage not found!"
                     else:
                         response_data["code"] = 403
-                        response_data["message"] = f"{self.env.user.name}, This action is forbidden!"
+                        response_data["message"] = f"{first_name}, This action is forbidden!"
                 else:
                     response_data["code"] = 404
                     response_data["message"] = "Courier not found!"
             
             return response_data
         except Exception as e:
-            logger.error(f"The following error ocurred while updating the courier request:\n\n{str(e)}")
+            logger.error(f"The following error ocurred while moving to the next stage:\n\n{str(e)}")
+            raise e
+        
+    def move_to_previous_stage(self, courier_id):
+        """Moves a Courier request to the previous stage"""
+
+        response_data = dict()
+        logged_in_user = self.env.user
+        first_name = (logged_in_user.name).partition(" ")[0]
+
+        try:
+            is_courier_manager = self.env.user.has_group('courier_manage.courier_management_manager_custom_group')
+            
+            if is_courier_manager:
+                courier = self.env['courier.custom'].search(
+                    [
+                        ('id', '=', int(courier_id))
+                    ]
+                )
+                
+                if courier:
+                    current_stage = courier.stage_id
+                    # Get the previous stage if the current stage is 
+                    # either marked as `cancel` or is not the `last` stage`
+                    if current_stage.is_cancel_stage or current_stage.is_last_stage == False:
+                        courier.write({"stage_id": courier.previous_stage_id})
+                        
+                        response_data["code"] = 200
+                        response_data["message"] = f"Successfully moved to {courier.stage_id.name} stage!"
+                    else:
+                        response_data["code"] = 403
+                        response_data["message"] = f"{first_name}, This action is forbidden!"
+                else:
+                    response_data["code"] = 404
+                    response_data["message"] = "Courier not found!"
+            else:
+                response_data["code"] = 403
+                response_data["message"] = f"{first_name}, You are not authorized to perform this action!"
+            
+            return response_data
+        except Exception as e:
+            logger.error(f"The following error ocurred while moving to the previous stage:\n\n{str(e)}")
+            raise e
+        
+    def move_to_cancel_stage(self, courier_id):
+        """Moves a Courier request to the cancellation stage"""
+
+        response_data = dict()
+        logged_in_user = self.env.user
+        first_name = (logged_in_user.name).partition(" ")[0]
+
+        try:
+            is_courier_manager = self.env.user.has_group('courier_manage.courier_management_manager_custom_group')
+            
+            if is_courier_manager:
+                courier = self.env['courier.custom'].search(
+                    [
+                        ('id', '=', int(courier_id))
+                    ]
+                )
+                
+                if courier:
+                    current_stage = courier.stage_id
+                    # Get the cancellation stage if the current stage is neither marked as `last` nor `cancel`
+                    if current_stage.is_last_stage == False or current_stage.is_cancel_stage == False:
+                        cancellation_stage = self.env['courier.stage.custom'].search(
+                            [
+                                ('is_cancel_stage', '=', True)
+                            ], 
+                            order='stage_sequence asc', limit=1
+                        )
+
+                        if cancellation_stage:
+                            courier.write({"stage_id": cancellation_stage.id})
+                            
+                            response_data["code"] = 200
+                            response_data["message"] = f"Successfully moved to {cancellation_stage.name} stage!"
+                        else:
+                            response_data["code"] = 404
+                            response_data["message"] = "Stage not found!"
+                    else:
+                        response_data["code"] = 403
+                        response_data["message"] = f"{first_name}, This action is forbidden!"
+                else:
+                    response_data["code"] = 404
+                    response_data["message"] = "Courier not found!"
+            else:
+                response_data["code"] = 403
+                response_data["message"] = f"{first_name}, You are not authorized to perform this action!"
+            
+            return response_data
+        except Exception as e:
+            logger.error(f"The following error ocurred while moving to the cancellation stage:\n\n{str(e)}")
             raise e

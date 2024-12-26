@@ -185,7 +185,17 @@ class NaidashSalesOrder(http.Controller):
                 return request.make_response(data, headers, status=status_code)
         except Exception as e:
             logger.exception(f"The following error occurred while confirming the sale order:\n\n{str(e)}")
-            data = json.dumps(
+            if "HTTPSConnectionPool" in str(e):
+                data = json.dumps(
+                    {
+                        "error": {
+                            "code": 504,
+                            "message": "Check your internet connection"
+                        }
+                    }
+                )
+            else:
+                data = json.dumps(
                 {
                     "error": {
                         "code": 500,
@@ -193,7 +203,7 @@ class NaidashSalesOrder(http.Controller):
                     }
                 }
             )
-            
+                   
             return request.make_response(data, headers, status=500)
         
     @route('/api/v1/naidash/sale/<int:sale_id>/cancel', methods=['GET'], auth='user', type='http')

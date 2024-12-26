@@ -24,6 +24,9 @@ class NaidashInvoice(models.Model):
         try:
             data = dict()
             response_data = dict()
+            logged_in_user = self.env.user
+            first_name = (logged_in_user.name).partition(" ")[0]
+                        
             is_courier_manager = self.env.user.has_group('courier_manage.courier_management_manager_custom_group')
             
             if is_courier_manager:
@@ -45,39 +48,6 @@ class NaidashInvoice(models.Model):
                     invoice = sales_order._create_invoices()    
                     
                     if invoice:
-                        try:
-                            invoice_template_id = self.env['wk.sms.template'].search([('model', '=', 'account.move')], order="id desc", limit=1).id
-                            
-                            if invoice_template_id:
-                                wk_sms = self.env["wk.sms.sms"]
-                                create_sms = wk_sms.create_the_sms(
-                                    {
-                                        "template_id": invoice_template_id,
-                                        "record_id": invoice.id,
-                                        "partner_ids": [invoice.partner_id.id]
-                                    }
-                                )
-                                
-                                sms_id = int(create_sms.get("data").get("id"))
-                                
-                                if sms_id:                                        
-                                    sms_response = wk_sms.send_the_sms(sms_id)
-                                    logger.info(f"SMS info:\n\n{sms_response}")
-                            else:
-                                response_data["code"] = 404
-                                response_data["message"] = "Template not found"
-                        except MissingError as e:
-                            logger.error(f"MissingError ocurred while sending the SMS:\n\n{str(e)}")
-                            msg = _("Record does not exist")
-                            raise MissingError(msg)
-                        except UserError as e:
-                            logger.error(f"UserError ocurred while sending the SMS:\n\n{str(e)}")
-                            raise e
-                        except Exception:
-                            logger.exception(f"Exception ocurred while sending the SMS:\n\n{str(e)}")
-                            msg = _("Install the `SMS` module")
-                            raise ValidationError(msg)
-                                                    
                         data['id'] = invoice.id
                         response_data["code"] = 201
                         response_data["message"] = "Invoice created successfully"
@@ -85,6 +55,22 @@ class NaidashInvoice(models.Model):
                         
                     courier_stage_update = sales_order.custom_courier_id.move_to_next_stage(sales_order.custom_courier_id.id)
                     status_code = courier_stage_update.get("code")
+                    
+                    try:
+                        next_stage = sales_order.custom_courier_id.stage_id
+                        partner_ids = [sales_order.partner_id.id]
+                        
+                        if next_stage.notification_type == "sms":
+                            invoice_template_id = self.env.ref('naidash_sms.sms_template_for_draft_invoice', raise_if_not_found=True).id
+                            if invoice_template_id:
+                                nautils.send_sms_using_template(invoice_template_id, invoice.id, partner_ids)
+                        elif next_stage.notification_type == "email":
+                            # Send email to the partner
+                            pass
+                    except Exception as e:
+                        logger.exception(f"Exception error ocurred while sending the SMS:\n\n{str(e)}")
+                        raise e
+                    
                     if status_code == 200:                                     
                         response_data["message"] = response_data["message"] + ".Kindly `confirm` or `cancel` the invoice"                    
                 else:
@@ -92,7 +78,7 @@ class NaidashInvoice(models.Model):
                     response_data["message"] = "Sales order not found!"
             else:
                 response_data["code"] = 403               
-                response_data["message"] = f"{self.env.user.name}, You are not authorized to perform this action!"                        
+                response_data["message"] = f"{first_name}, You are not authorized to perform this action!"                        
             return response_data
         except AccessError as e:
             logger.error(f"Access error ocurred while creating the invoice:\n\n{str(e)}")
@@ -495,6 +481,8 @@ class NaidashInvoice(models.Model):
         
         try:
             response_data = dict()
+            logged_in_user = self.env.user
+            first_name = (logged_in_user.name).partition(" ")[0]
             is_courier_manager = self.env.user.has_group('courier_manage.courier_management_manager_custom_group')
             
             # Courier Admins/Managers can confirm an invoice
@@ -507,37 +495,6 @@ class NaidashInvoice(models.Model):
                 
                 if invoice:
                     post_invoice = invoice.action_post()
-
-                    payment_link = nautils.generate_payment_link(invoice.partner_id, invoice.amount_residual, invoice.currency_id.name, invoice.ref)
-                    if payment_link:
-                        try:
-                            invoice_template_id = self.env.ref('naidash_sms.sms_template_for_posted_invoice', raise_if_not_found=True).id
-                            
-                            wk_sms = self.env["wk.sms.sms"]                            
-                            create_sms = wk_sms.create_the_sms(
-                                {
-                                    "group_type": "multiple",
-                                    "template_id": invoice_template_id,
-                                    "record_id": invoice.id,
-                                    "partner_ids": [invoice.partner_id.id]
-                                }
-                            )
-                            
-                            sms_id = int(create_sms.get("data").get("id"))
-                            
-                            if sms_id:                                        
-                                sms_response = wk_sms.send_the_sms(sms_id)
-                                logger.info(f"SMS info:\n\n{sms_response}")
-                        except MissingError as e:
-                            logger.error(f"MissingError ocurred while sending the SMS:\n\n{str(e)}")
-                            msg = _("Record does not exist")
-                            raise MissingError(msg)
-                        except UserError as e:
-                            logger.error(f"UserError ocurred while sending the SMS:\n\n{str(e)}")
-                            raise e
-                        except Exception as e:
-                            logger.exception(f"Exception error ocurred while sending the SMS:\n\n{str(e)}")
-                            raise e
                         
                     response_data["code"] = 200
                     response_data["message"] = "Invoice confirmed"
@@ -545,6 +502,23 @@ class NaidashInvoice(models.Model):
                     courier_stage_update = self.env['courier.custom'].move_to_next_stage(invoice.custom_courier_id.id)
                     status_code = courier_stage_update.get("code")
 
+                    payment_link = nautils.generate_payment_link(invoice.partner_id, invoice.amount_residual, invoice.currency_id.name, invoice.ref)
+                    if payment_link:
+                        try:
+                            next_stage = invoice.custom_courier_id.stage_id
+                            partner_ids = [invoice.partner_id.id]
+                            
+                            if next_stage.notification_type == "sms":
+                                invoice_template_id = self.env.ref('naidash_sms.sms_template_for_posted_invoice', raise_if_not_found=True).id
+                                if invoice_template_id:
+                                    nautils.send_sms_using_template(invoice_template_id, invoice.id, partner_ids)
+                            elif next_stage.notification_type == "email":
+                                # Send email to the partner
+                                pass
+                        except Exception as e:
+                            logger.exception(f"Exception error ocurred while sending the SMS:\n\n{str(e)}")
+                            raise e
+                        
                     if status_code == 200:
                         response_data["message"] = response_data["message"] + " successfully"
                 else:
@@ -552,7 +526,7 @@ class NaidashInvoice(models.Model):
                     response_data["message"] = "Invoice not found!"
             else:
                 response_data["code"] = 403               
-                response_data["message"] = f"{self.env.user.name}, This action is forbidden!"
+                response_data["message"] = f"{first_name}, You are not authorized to perform this action!"
             return response_data
         except Exception as e:
             logger.error(f"The following error ocurred while confirming the invoice details:\n\n{str(e)}")
@@ -564,6 +538,8 @@ class NaidashInvoice(models.Model):
         
         try:
             response_data = dict()
+            logged_in_user = self.env.user
+            first_name = (logged_in_user.name).partition(" ")[0]
             is_courier_manager = self.env.user.has_group('courier_manage.courier_management_manager_custom_group')
             
             # Courier Admins/Managers can cancel an invoice
@@ -583,7 +559,7 @@ class NaidashInvoice(models.Model):
                     response_data["message"] = "Invoice not found!"
             else:
                 response_data["code"] = 403
-                response_data["message"] = f"{self.env.user.name}, This action is forbidden!"
+                response_data["message"] = f"{first_name}, You are not authorized to perform this action!"
             return response_data
         except Exception as e:
             logger.error(f"The following error ocurred while cancelling the invoice:\n\n{str(e)}")
@@ -595,6 +571,8 @@ class NaidashInvoice(models.Model):
         
         try:
             response_data = dict()
+            logged_in_user = self.env.user
+            first_name = (logged_in_user.name).partition(" ")[0]
             is_courier_manager = self.env.user.has_group('courier_manage.courier_management_manager_custom_group')
             
             # Courier Admins/Managers can reset an invoice to draft
@@ -614,7 +592,7 @@ class NaidashInvoice(models.Model):
                     response_data["message"] = "Invoice not found!"
             else:
                 response_data["code"] = 403
-                response_data["message"] = f"{self.env.user.name}, This action is forbidden!"
+                response_data["message"] = f"{first_name}, You are not authorized to perform this action!"
             return response_data
         except Exception as e:
             logger.error(f"The following error ocurred while resetting the invoice to draft:\n\n{str(e)}")

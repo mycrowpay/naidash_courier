@@ -37,7 +37,7 @@ class NaidashUtils:
         }
         
         if report_type == 'pdf' and download:
-            filename = "%s.pdf" % (re.sub('\W+', '-', model._get_report_base_filename()))
+            filename = "%s.pdf" % (re.sub(r'\W+', '-', model._get_report_base_filename()))
             headers['Content-Disposition'] = content_disposition(filename)
         return headers
     

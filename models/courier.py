@@ -177,8 +177,15 @@ class NaidashCourier(models.Model):
     def _compute_distance_charges(self):
         for rec in self:
             line = rec.env['distance.price.custom'].search([('min_value','<=',rec.distance), ('max_value','>=',rec.distance)], limit=1)
-            rec.distance_product_id = line.product_id
-            rec.distance_charges = line.cost
+            if line:
+                rec.distance_product_id = line.product_id
+                rec.distance_charges = line.cost
+            else:
+                # Default values when no matching distance price is found
+                rec.distance_product_id = False
+                rec.distance_charges = 0.0
+                # Optionally log a warning
+                logger.warning(f"No distance price found for distance {rec.distance}")
 
     @api.depends('priority_id.charges', 'total_courier_charges', 'distance_charges')
     def _compute_additional_charges(self):

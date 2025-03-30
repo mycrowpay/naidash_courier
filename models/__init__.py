@@ -13,3 +13,4 @@ from . import dimension_price
 from . import product
 from . import tax
 from . import invoice
+from . import courier_line

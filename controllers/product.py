@@ -99,7 +99,17 @@ class NaidashProduct(http.Controller):
         ]
                 
         try:
-            product_details = request.env['product.product'].get_all_the_products()
+            query_params = dict()
+            is_active = request.params.get('active')
+            product_type = request.params.get('type')
+            
+            if is_active:
+                query_params["active"] = is_active
+                
+            if product_type:
+                query_params["type"] = product_type                
+            
+            product_details = request.env['product.product'].get_all_the_products(query_params)
             status_code = product_details.get("code")
             
             if status_code == 404:

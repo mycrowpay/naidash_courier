@@ -29,6 +29,7 @@ class NaidashProduct(models.Model):
                 invoice_policy = request_data.get("invoice_policy")
                 product_category_id = request_data.get("category_id")
                 company_id = request_data.get("company_id")
+                uom_id = request_data.get("uom_id")
                 tax_ids = request_data.get("tax_ids")
 
                 vals = {
@@ -48,7 +49,7 @@ class NaidashProduct(models.Model):
                 
                 if can_be_sold == True and not price:
                     response_data["code"] = 400
-                    response_data["message"] = f"Bad Request! Expected the `price` parameter if you'll be selling the {product_name} service"
+                    response_data["message"] = f"Bad Request! Expected the `price` parameter if you'll be selling the {product_name}"
                     return response_data
                 
                 if not product_category_id:
@@ -60,6 +61,11 @@ class NaidashProduct(models.Model):
                     response_data["code"] = 400
                     response_data["message"] = "Bad Request! Expected the `invoice_policy` parameter"
                     return response_data
+                
+                if not uom_id:
+                    response_data["code"] = 400
+                    response_data["message"] = "Bad Request! Expected the `uom_id` parameter"
+                    return response_data                
 
                 if price:
                     vals["lst_price"] = price
@@ -72,6 +78,7 @@ class NaidashProduct(models.Model):
                 vals["default_code"] = product_code
                 vals["invoice_policy"] = invoice_policy
                 vals["categ_id"] = int(product_category_id)
+                vals["uom_id"] = int(uom_id)
                 vals["company_id"] = int(company_id) if company_id else self.env.user.company_id.id
                 
                 if tax_ids:
@@ -111,8 +118,8 @@ class NaidashProduct(models.Model):
             if is_courier_manager:
                 product = self.env['product.product'].search(
                     [
-                        ('id','=', int(product_id)), ('detailed_type','=', 'service'), 
-                        '|', ('active','=', True), ('active','=', False)
+                        ('id','=', int(product_id)), '|', 
+                        ('active','=', True), ('active','=', False)
                     ]
                 )
                 
@@ -139,6 +146,9 @@ class NaidashProduct(models.Model):
                         
                     if request_data.get("company_id"):
                         product_details["company_id"] = int(request_data.get("company_id"))
+                        
+                    if request_data.get("uom_id"):
+                        product_details["uom_id"] = int(request_data.get("uom_id"))
                         
                     if request_data.get("active") == True or request_data.get("active") == False:
                         product_details["active"] = request_data.get("active")
@@ -186,13 +196,12 @@ class NaidashProduct(models.Model):
             response_data = dict()
             is_courier_manager = self.env.user.has_group('courier_manage.courier_management_manager_custom_group')
             
-            # Courier Admins/Managers can search for 
-            # any service product regardless of the active status
+            # Courier Admins/Managers can search for any product
             if is_courier_manager:
                 product = self.env['product.product'].search(
                     [
-                        ('id','=', int(product_id)), ('detailed_type','=', 'service'), 
-                        '|', ('active','=', True), ('active','=', False)
+                        ('id','=', int(product_id)), '|',
+                        ('active','=', True), ('active','=', False)
                     ]
                 )
                 
@@ -207,6 +216,7 @@ class NaidashProduct(models.Model):
                     data["expense_policy"] = product.expense_policy
                     data["active"] = product.active
                     data["category"] = {"id": product.categ_id.id, "name": product.categ_id.name} if product.categ_id else {}
+                    data["uom"] = {"id": product.uom_id.id, "name": product.uom_id.name} if product.uom_id else {}
                     data["tax_ids"] = [{"id": tax.id, "name": tax.name} for tax in product.taxes_id] if product.taxes_id else []
                     data["company"] = {"id": product.company_id.id, "name": product.company_id.name} if product.company_id else {}
                                         
@@ -225,25 +235,29 @@ class NaidashProduct(models.Model):
             logger.error(f"The following error ocurred while fetching the product details:\n\n{str(e)}")
             raise e
         
-    def get_all_the_products(self):
+    def get_all_the_products(self, query_params):
         """Get all the products
         """        
         
         try:
             response_data = dict()
             all_products = []
+            search_criteria = list()
             is_courier_manager = self.env.user.has_group('courier_manage.courier_management_manager_custom_group')
             
-            # Courier Admins/Managers can search for 
-            # any service product regardless of the active status
+            # Courier Admins/Managers can search for products
             if is_courier_manager:
-                products = self.env['product.product'].search(
-                    [
-                        ('detailed_type','=', 'service'),
-                        '|',
-                        ('active','=', True),
-                        ('active','=', False)
-                    ])
+                if query_params.get("type"):
+                    search_criteria.append(
+                        ('detailed_type','=', query_params.get("type"))
+                    )
+                    
+                if query_params.get("active") == True or query_params.get("active") == False:
+                    search_criteria.append(
+                        ('active','=', query_params.get("active"))
+                    )
+                                                                      
+                products = self.env['product.product'].search(search_criteria)
                 
                 if products:
                     for product in products:
@@ -258,6 +272,7 @@ class NaidashProduct(models.Model):
                         data["expense_policy"] = product.expense_policy
                         data["active"] = product.active
                         data["category"] = {"id": product.categ_id.id, "name": product.categ_id.name} if product.categ_id else {}
+                        data["uom"] = {"id": product.uom_id.id, "name": product.uom_id.name} if product.uom_id else {}
                         data["tax_ids"] = [{"id": tax.id, "name": tax.name} for tax in product.taxes_id] if product.taxes_id else []
                         data["company"] = {"id": product.company_id.id, "name": product.company_id.name} if product.company_id else {}
                         

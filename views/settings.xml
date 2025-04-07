@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="naidash_location_res_config_settings_inherit_view_form" model="ir.ui.view">
+        <field name="name">naidash.location.res.config.settings.view.form.inherit</field>
+        <field name="model">res.config.settings</field>
+        <field name="priority" eval="8" />
+        <field name="inherit_id" ref="base.res_config_settings_view_form" />
+        <field name="arch" type="xml">
+            <xpath expr="//div[@id='naidash']" position="inside">
+                <div class="o_setting_right_pane">
+                    <label for="openstreetmap_base_url"/>
+                    <field name="openstreetmap_base_url" />                       
+                </div>
+                <div class="o_setting_right_pane">
+                    <label for="mapbox_base_url"/>
+                    <field name="mapbox_base_url" />                       
+                </div>
+                <div class="o_setting_right_pane">
+                    <label for="mapbox_access_token"/>
+                    <field name="mapbox_access_token" />                       
+                </div>
+            </xpath>
+        </field>
+    </record>
+</odoo>

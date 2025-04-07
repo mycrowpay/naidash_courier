@@ -14,3 +14,6 @@ from . import product
 from . import tax
 from . import invoice
 from . import courier_line
+from . import settings
+from . import map
+from . import shipment

@@ -53,19 +53,19 @@ class NaidashUtils:
         headers = [('Content-Type', 'application/json')]
         
         try:
-            base_url = request.env['ir.config_parameter'].sudo().get_param('app_1_base_url')
+            base_url = request.env['ir.config_parameter'].sudo().get_param('naidash_base_url')
             
             if not base_url:
                 data = json.dumps(
                     {
                         "error": {
-                            "code": 500,
+                            "code": 404,
                             "message": "Base URL not found"
                         }
                     }
                 )
                 
-                return request.make_response(data, headers, status=500)
+                return request.make_response(data, headers, status=404)
             
             # Generate an access token based on the provided values
             access_token = payment_utils.generate_access_token(

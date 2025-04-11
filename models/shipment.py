@@ -52,29 +52,27 @@ class NaidashShipment(models.Model):
             is_courier_manager = self.env.user.has_group('courier_manage.courier_management_manager_custom_group')
             
             if is_courier_manager:
+                origin_address = "No Address"
+                destination_address = "No Address"
                 courier_id = request_data.get("courier_id")
                 courier_line_id = request_data.get("courier_line_id")
-                origin_address = request_data.get("origin_address")
                 origin_latitude = request_data.get("origin_latitude")
                 origin_longitude = request_data.get("origin_longitude")
-                destination_address = request_data.get("destination_address")
-                destination_latitude = request_data.get("destination_latitude")
                 destination_longitude = request_data.get("destination_longitude")
+                destination_latitude = request_data.get("destination_latitude")
                 
                 if not courier_id and not courier_line_id:
                     response_data["code"] = 400
                     response_data["message"] = "Bad Request! Courier id or Courier line id is required"
                     return response_data
-                
-                if not origin_address:
-                    response_data["code"] = 400
-                    response_data["message"] = "Bad Request! Origin address is required"
-                    return response_data
-                
-                if not destination_address:
-                    response_data["code"] = 400
-                    response_data["message"] = "Bad Request! Destination address is required"
-                    return response_data
+                                                                                        
+                if origin_latitude and origin_longitude:
+                    src_address = naimap.reverse_geocoding_using_openstreetmap(origin_latitude, origin_longitude)
+                    origin_address = src_address.get("data").get("name")                        
+                    
+                if destination_latitude and destination_longitude:                                                                                                                                              
+                    dest_address = naimap.reverse_geocoding_using_openstreetmap(destination_latitude, destination_longitude)
+                    destination_address = dest_address.get("data").get("name")                        
                 
                 shipment = self.env['courier.shipment'].create(
                     {
@@ -264,7 +262,7 @@ class NaidashShipment(models.Model):
                 data["distance"] = shipment.distance
                 data["navigation_link"] = shipment.navigation_link
                 data["courier"] = {"id": shipment.courier_id.id, "name": shipment.courier_id.name} if shipment.courier_id else {}
-                data["courier_line"] = {"id": shipment.courier_line_id.id, "name": shipment.courier_line_id.name, "courier_request": {"id": shipment.courier_id.id, "name": shipment.courier_id.name}} if shipment.courier_line_id else {}
+                data["courier_line"] = {"id": shipment.courier_line_id.id, "name": shipment.courier_line_id.name} if shipment.courier_line_id else {}
                 
                 response_data["code"] = 200
                 response_data["message"] = "Success"
@@ -278,6 +276,78 @@ class NaidashShipment(models.Model):
             logger.error(f"The following error ocurred while fetching the shipment details:\n\n{str(e)}")
             raise e
         
+    def get_all_the_shipments(self, query_params):
+        """Get all the shipments
+        """        
+        
+        try:
+            response_data = dict()
+            all_shipments = []
+            search_criteria = list()
+            logged_in_user = self.env.user
+            
+            if query_params.get("courier_id"):
+                search_criteria.append(
+                    ('courier_id','=', int(query_params.get("courier_id")))
+                )
+                                                                    
+            shipments = self.env['courier.shipment'].search(search_criteria)                
+            
+            if shipments:
+                for shipment in shipments:
+                    data = dict()
+                    data["id"] = shipment.id
+                    data["name"] = shipment.name
+                    data["origin_address"] = shipment.origin_address
+                    data["origin_latitude"] = shipment.origin_latitude
+                    data["origin_longitude"] = shipment.origin_longitude
+                    data["destination_address"] = shipment.destination_address
+                    data["destination_latitude"] = shipment.destination_latitude
+                    data["destination_longitude"] = shipment.destination_longitude
+                    data["start_date"] = ""
+                    data["end_date"] = ""
+                    
+                    if shipment.start_date:
+                        user_timezone = logged_in_user.tz or pytz.utc
+                        user_timezone = pytz.timezone(user_timezone)
+                        start_date = (shipment.start_date).strftime("%Y-%m-%d %H:%M")
+                        start_date = datetime.strftime(
+                            pytz.utc.localize(datetime.strptime(start_date, "%Y-%m-%d %H:%M")).astimezone(user_timezone),
+                            "%Y-%m-%d %H:%M"
+                        )
+                        
+                        data["start_date"] = start_date
+                        
+                    if shipment.end_date:
+                        user_timezone = logged_in_user.tz or pytz.utc
+                        user_timezone = pytz.timezone(user_timezone)
+                        end_date = (shipment.end_date).strftime("%Y-%m-%d %H:%M")
+                        end_date = datetime.strftime(
+                            pytz.utc.localize(datetime.strptime(end_date, "%Y-%m-%d %H:%M")).astimezone(user_timezone),
+                            "%Y-%m-%d %H:%M"
+                        )
+                        
+                        data["end_date"] = end_date 
+                                                            
+                    data["duration"] = shipment.duration
+                    data["distance"] = shipment.distance
+                    data["navigation_link"] = shipment.navigation_link
+                    data["courier"] = {"id": shipment.courier_id.id, "name": shipment.courier_id.name} if shipment.courier_id else {}
+                    data["courier_line"] = {"id": shipment.courier_line_id.id, "name": shipment.courier_line_id.name} if shipment.courier_line_id else {}
+                    
+                    all_shipments.append(data)
+                
+                response_data["code"] = 200
+                response_data["message"] = "Success"
+                response_data["data"] = all_shipments
+            else:
+                response_data["code"] = 404
+                response_data["message"] = "Shipment not found!"
+            
+            return response_data
+        except Exception as e:
+            logger.error(f"The following error ocurred while fetching the shipments:\n\n{str(e)}")
+            raise e
         
     def start_shipping(self, shipment_id):
         """Start shipping the package

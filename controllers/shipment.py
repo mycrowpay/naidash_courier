@@ -88,6 +88,55 @@ class NaidashShipment(http.Controller):
             
             return request.make_response(data, headers, status=500)
         
+    @route('/api/v1/ship', methods=['GET'], auth='user', type='http')
+    def get_shipments(self):
+        """
+        Returns all the shipments
+        """ 
+        
+        headers = [
+            ('Content-Type', 'application/json')
+        ]
+                
+        try:
+            query_params = dict()
+            courier_id = request.params.get('courier_id')
+            
+            if courier_id:
+                query_params["courier_id"] = courier_id
+                            
+            shipment_details = request.env['courier.shipment'].get_all_the_shipments(query_params)            
+            status_code = shipment_details.get("code")
+            
+            if status_code == 404:
+                data = json.dumps(
+                    {
+                        "error": shipment_details
+                    }
+                )
+
+                return request.make_response(data, headers, status=status_code)
+            else:                
+                data = json.dumps(
+                    {
+                        "result": shipment_details
+                    }
+                )
+
+                return request.make_response(data, headers, status=status_code)
+        except Exception as e:
+            logger.exception(f"The following error occurred while fetching the shipments:\n\n{str(e)}")
+            data = json.dumps(
+                {
+                    "error": {
+                        "code": 500,
+                        "message": str(e)
+                    }
+                }
+            )
+            
+            return request.make_response(data, headers, status=500)
+        
     @route('/api/v1/ship/<int:shipment_id>/start', methods=['GET'], auth='user', type='http')
     def start_shipping(self, shipment_id):
         """Start shipping the item

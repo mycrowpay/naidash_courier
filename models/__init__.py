@@ -17,3 +17,4 @@ from . import courier_line
 from . import settings
 from . import map
 from . import shipment
+from . import stock_lot

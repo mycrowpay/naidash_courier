@@ -32,9 +32,11 @@ class NaidashProduct(models.Model):
                 uom_id = request_data.get("uom_id")
                 tax_ids = request_data.get("tax_ids")
                 product_type = request_data.get("type")
+                tracking = request_data.get("tracking")
 
                 vals = {
                     "detailed_type": product_type,
+                    "tracking": tracking,
                     "expense_policy": "no"
                 }
                 
@@ -132,6 +134,9 @@ class NaidashProduct(models.Model):
                 if product:
                     product_details = dict()
                     
+                    if request_data.get("tracking"):
+                        product_details["tracking"] = request_data.get("tracking")
+                    
                     if request_data.get("type"):
                         product_details["detailed_type"] = request_data.get("type")
                                 
@@ -223,6 +228,7 @@ class NaidashProduct(models.Model):
                     data["price"] = product.lst_price
                     data["invoice_policy"] = product.invoice_policy
                     data["expense_policy"] = product.expense_policy
+                    data["tracking"] = product.tracking
                     data["active"] = product.active
                     data["category"] = {"id": product.categ_id.id, "name": product.categ_id.name} if product.categ_id else {}
                     data["uom"] = {"id": product.uom_id.id, "name": product.uom_id.name} if product.uom_id else {}
@@ -279,6 +285,7 @@ class NaidashProduct(models.Model):
                         data["price"] = product.lst_price
                         data["invoice_policy"] = product.invoice_policy
                         data["expense_policy"] = product.expense_policy
+                        data["tracking"] = product.tracking
                         data["active"] = product.active
                         data["category"] = {"id": product.categ_id.id, "name": product.categ_id.name} if product.categ_id else {}
                         data["uom"] = {"id": product.uom_id.id, "name": product.uom_id.name} if product.uom_id else {}

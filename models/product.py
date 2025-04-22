@@ -12,7 +12,7 @@ class NaidashProduct(models.Model):
     _inherit = "product.product"
     
     def create_the_product(self, request_data):
-        """Create a service product
+        """Create a product
         """ 
         
         try:
@@ -31,9 +31,10 @@ class NaidashProduct(models.Model):
                 company_id = request_data.get("company_id")
                 uom_id = request_data.get("uom_id")
                 tax_ids = request_data.get("tax_ids")
+                product_type = request_data.get("type")
 
                 vals = {
-                    "detailed_type": "service",
+                    "detailed_type": product_type,
                     "expense_policy": "no"
                 }
                 
@@ -46,6 +47,11 @@ class NaidashProduct(models.Model):
                     response_data["code"] = 400
                     response_data["message"] = "Bad Request! Expected the `code` parameter"
                     return response_data
+                
+                if not product_type:
+                    response_data["code"] = 400
+                    response_data["message"] = "Bad Request! Expected the product type"
+                    return response_data                
                 
                 if can_be_sold == True and not price:
                     response_data["code"] = 400
@@ -125,6 +131,9 @@ class NaidashProduct(models.Model):
                 
                 if product:
                     product_details = dict()
+                    
+                    if request_data.get("type"):
+                        product_details["detailed_type"] = request_data.get("type")
                                 
                     if request_data.get("name"):
                         product_details["name"] = request_data.get("name")

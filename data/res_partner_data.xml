@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+        <!-- Create the company's partner -->
+        <record model="res.partner" id="naidash_courier.main_partner" context="{'default_is_company': True}">
+            <field name="name">Courier Company</field>
+            <field name="company_id" eval="None"/>
+            <field name="is_company" eval="True"/>
+            <field name="street"></field>
+            <field name="city"></field>
+            <field name="zip"></field>
+            <field name="phone"></field>
+            <field name="image_1920" type="base64" file="naidash_courier/static/img/icon_company.png"/>
+        </record>
+
+        <!-- Create the company -->
+        <record id="naidash_courier.main_company" model="res.company">
+            <field name="name">Courier Company</field>
+            <field name="partner_id" ref="naidash_courier.main_partner"/>
+            <field name="currency_id" ref="base.KES"/>
+        </record>        
+
+        <!-- Create the partners for various users -->
+        <record model="res.partner" id="naidash_courier.partner_admin">
+            <field name="name">Courier Admin</field>
+            <field name="company_id" ref="naidash_courier.main_company"/>
+            <field name="email">courieradmin@email.com</field>
+            <field name="country_id" ref='base.ke'/>
+            <field name="tz">Africa/Nairobi</field>
+            <field name="image_1920" type="base64" file="naidash_courier/static/img/icon_admin.png"/>
+            <!-- <field name="active" eval="False"/> -->
+        </record>
+        
+        <record model="res.partner" id="naidash_courier.partner_dispatcher">
+            <field name="name">Courier Dispatcher</field>
+            <field name="company_id" ref="naidash_courier.main_company"/>
+            <field name="email">courierdispatcher@email.com</field>
+            <field name="country_id" ref='base.ke'/>
+            <field name="tz">Africa/Nairobi</field>
+            <field name="image_1920" type="base64" file="naidash_courier/static/img/icon_dispatcher_3.png"/>
+            <!-- <field name="active" eval="False"/> -->
+        </record>
+
+        <record model="res.partner" id="naidash_courier.partner_rider">
+            <field name="name">Courier Rider</field>
+            <field name="company_id" ref="naidash_courier.main_company"/>
+            <field name="email">courierrider@email.com</field>
+            <field name="country_id" ref='base.ke'/>
+            <field name="tz">Africa/Nairobi</field>
+            <field name="image_1920" type="base64" file="naidash_courier/static/img/icon_rider.png"/>
+            <!-- <field name="active" eval="False"/> -->
+        </record>
+
+        <record model="res.partner" id="naidash_courier.partner_delivery">
+            <field name="name">Courier Delivery Partner</field>
+            <field name="company_id" ref="naidash_courier.main_company"/>
+            <field name="email">courierdeliverypartner@email.com</field>
+            <field name="country_id" ref='base.ke'/>
+            <field name="tz">Africa/Nairobi</field>
+            <field name="image_1920" type="base64" file="naidash_courier/static/img/icon_delivery_partner.png"/>
+            <field name="active" eval="False"/>
+        </record>
+
+        <record model="res.partner" id="naidash_courier.partner_customer">
+            <field name="name">Courier Customer</field>
+            <field name="company_id" ref="naidash_courier.main_company"/>
+            <field name="email">couriercustomer@email.com</field>
+            <field name="country_id" ref='base.ke'/>
+            <field name="tz">Africa/Nairobi</field>
+            <field name="image_1920" type="base64" file="naidash_courier/static/img/icon_customer.png"/>
+            <field name="active" eval="False"/>
+        </record>
+    </data>
+</odoo>

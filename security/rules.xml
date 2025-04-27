@@ -1,0 +1,74 @@
+<?xml version="1.0"?>
+<odoo>
+    <data noupdate="1">
+        <!-- Record rules -->
+
+        <!-- Record rule for the portal group -->
+        <record model="ir.rule" id="naidash_courier.rule_customer_courier_records" >
+            <field name="name">Courier Customer - Record Rule</field>
+            <field name="model_id" ref="model_courier_custom"/>
+            <field name="groups" eval="[Command.link(ref('naidash_courier.group_customer'))]"/>
+            <field name="domain_force">[
+            '|', '|', 
+            ('create_uid', '=', user.id), 
+            ('sender_name_id', '=', user.partner_id.id),
+            ('receiver_name_id', '=', user.partner_id.id)
+            ]</field>
+            <!-- <field name="perm_create" eval="False"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="False"/>
+            <field name="perm_unlink" eval="False"/> -->
+        </record>
+
+        <!-- Record rule for the portal group -->
+        <record model="ir.rule" id="naidash_courier.rule_delivery_partner_courier_records" >
+            <field name="name">Courier Delivery Partner - Record Rule</field>
+            <field name="model_id" ref="model_courier_custom"/>
+            <field name="groups" eval="[Command.link(ref('naidash_courier.group_delivery_partner'))]"/>
+            <field name="domain_force">[
+            '|', 
+            ('create_uid', '=', user.id), 
+            ('delivery_partner_id', '=', user.partner_id.id)
+            ]</field>
+            <!-- <field name="perm_create" eval="False"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="False"/>
+            <field name="perm_unlink" eval="False"/> -->
+        </record>        
+
+        <!-- Record rule for the rider group -->
+        <record model="ir.rule" id="naidash_courier.rule_rider_courier_records">
+            <field name="name">Courier Rider - Record Rule</field>
+            <field name="model_id" ref="model_courier_custom"/>
+            <field name="groups" eval="[Command.link(ref('naidash_courier.group_rider'))]"/>
+            <field name="domain_force">[
+            '|', 
+            ('create_uid', '=', user.id), 
+            ('rider_id.user_id.partner_id', '=', user.partner_id.id)
+            ]</field>
+        </record>
+
+        <!-- Record rule for the dispatcher group -->
+        <record model="ir.rule" id="naidash_courier.rule_dispatcher_courier_records">
+            <field name="name">Courier Dispatcher - Record Rule</field>
+            <field name="model_id" ref="model_courier_custom"/>
+            <field name="groups" eval="[Command.link(ref('naidash_courier.group_dispatcher'))]"/>
+            <field name="domain_force">[
+            '|', 
+            ('create_uid', '=', user.id),
+            ('dispatcher_id.user_id.partner_id', '=', user.partner_id.id)
+            ]</field>
+            <!-- <field name="domain_force">['|', '|', ('company_id', '=', user.company_id.id), ('create_uid', '=', user.id), ('dispatcher_id.user_id', '=', user.id)]</field> -->
+        </record>        
+       
+        <!-- Record rule for the admin group -->
+        <record model="ir.rule" id="naidash_courier.rule_admin_courier_records">
+            <field name="name">Courier Admin - Record Rule</field>
+            <field name="model_id" ref="model_courier_custom"/>
+            <field name="groups" eval="[Command.link(ref('naidash_courier.group_admin'))]"/>
+            <!-- Unrestricted access for admin group -->
+            <field name="domain_force">[(1,'=',1)]</field>
+        </record>
+
+    </data>
+</odoo>

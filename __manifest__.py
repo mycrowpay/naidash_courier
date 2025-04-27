@@ -18,11 +18,14 @@
     'version': '0.1',
 
     # any module necessary for this one to work correctly
-    'depends': ['base', 'contacts', 'courier_manage', 'naidash_sms'],
+    'depends': ['base', 'contacts', 'hr', 'courier_manage', 'naidash_sms'],
 
     # always loaded
     'data': [
-        # 'security/groups.xml',
+        'data/res_partner_data.xml',
+        'data/res_user_data.xml',
+        'security/groups.xml',
+        'security/rules.xml',
         'security/ir.model.access.csv',
         # 'data/ir_sequence_data.xml',
         'views/views.xml',

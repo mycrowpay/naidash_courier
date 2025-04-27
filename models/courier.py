@@ -18,7 +18,8 @@ class NaidashCourier(models.Model):
     sender_name_id = fields.Many2one(
         'res.partner',
         string = "Sender's Name",
-        required = False
+        required = False,
+        tracking = True
     )
     
     sender_street = fields.Text(
@@ -63,7 +64,8 @@ class NaidashCourier(models.Model):
     receiver_name_id = fields.Many2one(
         'res.partner',
         string = "Receiver's Name",
-        required = False
+        required = False,
+        tracking = True
     )
         
     receiver_name = fields.Char(
@@ -138,7 +140,8 @@ class NaidashCourier(models.Model):
     user_id = fields.Many2one(
         'res.users',
         string = "Responsible User",
-        readonly = False
+        readonly = False,
+        tracking = True
     )
     
     company_id = fields.Many2one(
@@ -151,7 +154,25 @@ class NaidashCourier(models.Model):
     previous_stage_id = fields.Integer(
         string = "Previous Stage ID"
     )
+
+    delivery_partner_id = fields.Many2one(
+        'res.partner',
+        string = "Delivery Partner",
+        tracking = True
+    )
     
+    dispatcher_id = fields.Many2one(
+        'hr.employee',
+        string = "Dispatcher",
+        tracking = True
+    )
+    
+    rider_id = fields.Many2one(
+        'hr.employee',
+        string = "Driver/Rider",
+        tracking = True
+    )
+        
     @api.model
     def create(self, vals):        
         if vals.get('name', _('New')) == _('New'):

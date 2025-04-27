@@ -1,0 +1,94 @@
+<?xml version="1.0"?>
+<odoo>
+    <data noupdate="0">
+        <!-- This file defines the user groups and their permissions for the Naidash Courier module. -->
+        <!-- The groups are organized into a hierarchy, with the Admin group having the highest level of access. -->
+        <!-- The groups are as follows: -->
+        <!-- 1. Customer: Basic access for guests or customers with limited permissions. -->
+        <!-- 2. Delivery Partner: Access for delivery partners with specific menu access. -->
+        <!-- 3. Rider: Access for drivers or riders with specific menu access. -->
+        <!-- 4. Dispatcher: Access for dispatchers with specific menu access. -->
+        <!-- 5. Admin: Full access for administrators with all permissions. -->
+        <!-- The groups are created under the "Naidash Courier" category. -->
+        <!-- The users are assigned to their respective groups, ensuring they have the appropriate access rights. -->
+
+        <!-- Create a category for groups -->
+        <record model="ir.module.category" id="naidash_courier_module">
+            <field name="name">Naidash Courier</field>
+            <field name="description">Naidash Courier Users</field>
+            <field name="sequence">25</field>
+        </record>
+
+        <!-- Create the customer group -->
+        <record  model="res.groups" id="naidash_courier.group_customer">
+            <field name="name">Customer</field>
+            <field name="category_id" ref="naidash_courier_module"/>
+            <field name="implied_ids" eval="[Command.link(ref('base.group_portal'))]"/>
+            <field name="comment">This group is designed for guests or customers, offering restricted menu options and minimal access rights.</field>
+            <!-- <field name="implied_ids" eval="[(4, ref('base.group_portal'))]"/> -->
+        </record>
+
+        <!-- Create the delivery partner group -->
+        <record model="res.groups" id="naidash_courier.group_delivery_partner">
+            <field name="name">Delivery Partner</field>
+            <field name="category_id" ref="naidash_courier_module"/>
+            <field name="implied_ids" eval="[Command.link(ref('base.group_portal'))]"/>
+            <field name="comment">This group is intended for Delivery Partners, providing them with access to specific menus and limited permissions.</field>
+            <!-- <field name="implied_ids" eval="[(4, ref('base.group_portal'))]"/> -->
+        </record>        
+
+        <!-- Create the rider group -->
+        <record model="res.groups" id="naidash_courier.group_rider">
+            <field name="name">Rider</field>
+            <field name="category_id" ref="naidash_courier_module"/>
+            <field name="implied_ids" eval="[Command.link(ref('base.group_user'))]"/>
+            <field name="comment">This group is designated for Drivers or Riders, granting them access to specific menus and limited permissions.</field>
+            <!-- <field name="implied_ids" eval="[(4, ref('base.group_user'))]"/> -->
+        </record>
+
+        <!-- Create the dispatcher group -->
+        <record model="res.groups" id="naidash_courier.group_dispatcher">
+            <field name="name">Dispatcher</field>
+            <field name="category_id" ref="naidash_courier_module"/>
+            <field name="implied_ids" eval="[Command.link(ref('naidash_courier.group_rider'))]"/>
+            <field name="comment">This group is intended for Dispatchers, providing them with access to specific menus and limited permissions.</field>
+            <!-- <field name="implied_ids" eval="[(4, ref('naidash_courier.group_rider'))]"/> -->
+        </record>
+
+        <!-- Create the admin group -->
+        <record model="res.groups" id="naidash_courier.group_admin">
+            <field name="name">Admin</field>
+            <field name="category_id" ref="naidash_courier_module"/>
+            <field name="implied_ids" eval="[Command.link(ref('naidash_courier.group_dispatcher'))]"/>
+            <field name="users" eval="[Command.link(ref('base.user_root')), Command.link(ref('base.user_admin'))]"/>
+            <field name="comment">This group is intended for Administrators, providing them with access to all courier menus and full permissions.</field>
+            <!-- <field name="users" eval="[(4, ref('base.user_root')), (4, ref('base.user_admin'))]"/> -->
+        </record>
+
+        <!-- Add the customer to the customer group -->
+        <record model="res.users" id="naidash_courier.user_customer">
+            <field name="groups_id" eval="[Command.link(ref('naidash_courier.group_customer'))]"/>
+        </record>
+
+        <!-- Add the delivery partner to the delivery partner group -->
+        <record model="res.users" id="naidash_courier.user_delivery_partner">
+            <field name="groups_id" eval="[Command.link(ref('naidash_courier.group_delivery_partner'))]"/>
+        </record>
+
+        <!-- Add the rider to the rider group -->
+        <record model="res.users" id="naidash_courier.user_rider">
+            <field name="groups_id" eval="[Command.link(ref('naidash_courier.group_rider'))]"/>
+        </record>
+
+        <!-- Add the dispatcher to the dispatcher group -->
+        <record model="res.users" id="naidash_courier.user_dispatcher">
+            <field name="groups_id" eval="[Command.link(ref('naidash_courier.group_dispatcher'))]"/>
+        </record>
+
+        <!-- Add the admin to the admin group -->
+        <record model="res.users" id="naidash_courier.user_admin">
+            <field name="groups_id" eval="[Command.link(ref('naidash_courier.group_admin'))]"/>
+        </record>
+
+    </data>
+</odoo>

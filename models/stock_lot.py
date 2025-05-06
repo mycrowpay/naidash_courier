@@ -19,58 +19,52 @@ class NaidashStockLot(models.Model):
             data = dict()
             response_data = dict()
                         
-            is_courier_manager = self.env.user.has_group('courier_manage.courier_management_manager_custom_group')
+            lot_or_serial_number = request_data.get("lot_or_serial_no")
+            product_id = request_data.get("product_id")
+            internal_reference_no = request_data.get("internal_reference_no","")
+            description = request_data.get("description","")
             
-            if is_courier_manager:
-                lot_or_serial_number = request_data.get("lot_or_serial_no")
-                product_id = request_data.get("product_id")
-                internal_reference_no = request_data.get("internal_reference_no","")
-                description = request_data.get("description","")
-                
-                if not lot_or_serial_number:
-                    response_data["code"] = 400
-                    response_data["message"] = "Bad Request! Expected a unique lot or serial number"
-                    return response_data
+            if not lot_or_serial_number:
+                response_data["code"] = 400
+                response_data["message"] = "Bad Request! Expected a unique lot or serial number"
+                return response_data
 
-                if not product_id:
-                    response_data["code"] = 400
-                    response_data["message"] = "Bad Request! Expected the product id"
-                    return response_data
+            if not product_id:
+                response_data["code"] = 400
+                response_data["message"] = "Bad Request! Expected the product id"
+                return response_data
+            
+            product = self.env['product.product'].search(
+                [
+                    ('id', '=', int(product_id)),
+                    ('detailed_type', '=', 'product'), 
+                    ('tracking', '!=', 'none')
+                ]
+            )
+            
+            if product:
+                vals = dict()
+                vals["name"] = lot_or_serial_number
+                vals["product_id"] = product.id
+                vals["note"] = description
+                vals["ref"] = internal_reference_no
+                vals["company_id"] = product.company_id.id if product.company_id else self.env.user.company_id.id
                 
-                product = self.env['product.product'].search(
-                    [
-                        ('id', '=', int(product_id)),
-                        ('detailed_type', '=', 'product'), 
-                        ('tracking', '!=', 'none')
-                    ]
-                )
+                stock_lot = self.env['stock.lot'].create(vals)
                 
-                if product:
-                    vals = dict()
-                    vals["name"] = lot_or_serial_number
-                    vals["product_id"] = product.id
-                    vals["note"] = description
-                    vals["ref"] = internal_reference_no
-                    vals["company_id"] = product.company_id.id if product.company_id else self.env.user.company_id.id
-                    
-                    stock_lot = self.env['stock.lot'].create(vals)
-                    
-                    if stock_lot:
-                        data['id'] = stock_lot.id
-                        response_data["code"] = 201
-                        response_data["message"] = "Created successfully"
-                        response_data["data"] = data
-                    else:
-                        response_data["code"] = 204
-                        response_data["message"] = "Could not create the stock lot"
-                        return response_data
+                if stock_lot:
+                    data['id'] = stock_lot.id
+                    response_data["code"] = 201
+                    response_data["message"] = "Created successfully"
+                    response_data["data"] = data
                 else:
-                    response_data["code"] = 404
-                    response_data["message"] = "Product not found!"
+                    response_data["code"] = 204
+                    response_data["message"] = "Could not create the stock lot"
                     return response_data
             else:
-                response_data["code"] = 403
-                response_data["message"] = f"{self.env.user.name}, You are not authorized to perform this action!"
+                response_data["code"] = 404
+                response_data["message"] = "Product not found!"
+                return response_data
             
             return response_data
         except Exception as e:
@@ -83,40 +77,34 @@ class NaidashStockLot(models.Model):
                 
         try:
             response_data = dict()
-            is_courier_manager = self.env.user.has_group('courier_manage.courier_management_manager_custom_group')
+            stock_lot = self.env['stock.lot'].browse(int(stock_lot_id))
             
-            if is_courier_manager:
-                stock_lot = self.env['stock.lot'].browse(int(stock_lot_id))
+            if stock_lot:
+                stock_lot_details = dict()
                 
-                if stock_lot:
-                    stock_lot_details = dict()
+                if request_data.get("lot_or_serial_no"):
+                    stock_lot_details["name"] = request_data.get("lot_or_serial_no")
+                
+                if request_data.get("product_id"):
+                    stock_lot_details["product_id"] = int(request_data.get("product_id"))
+                            
+                if request_data.get("internal_reference_no"):
+                    stock_lot_details["ref"] = request_data.get("internal_reference_no")
                     
-                    if request_data.get("lot_or_serial_no"):
-                        stock_lot_details["name"] = request_data.get("lot_or_serial_no")
+                if request_data.get("description"):
+                    stock_lot_details["note"] = request_data.get("description")
                     
-                    if request_data.get("product_id"):
-                        stock_lot_details["product_id"] = int(request_data.get("product_id"))
-                                
-                    if request_data.get("internal_reference_no"):
-                        stock_lot_details["ref"] = request_data.get("internal_reference_no")
-                        
-                    if request_data.get("description"):
-                        stock_lot_details["note"] = request_data.get("description")
-                        
-                    # Update stock lot details
-                    if stock_lot_details:
-                        stock_lot.write(stock_lot_details)
-                        response_data["code"] = 200
-                        response_data["message"] = "Updated successfully"
-                    else:
-                        response_data["code"] = 204
-                        response_data["message"] = "Nothing to update"
+                # Update stock lot details
+                if stock_lot_details:
+                    stock_lot.write(stock_lot_details)
+                    response_data["code"] = 200
+                    response_data["message"] = "Updated successfully"
                 else:
-                    response_data["code"] = 404
-                    response_data["message"] = "Stock lot not found!"                    
+                    response_data["code"] = 204
+                    response_data["message"] = "Nothing to update"
             else:
-                response_data["code"] = 403
-                response_data["message"] = f"{self.env.user.name}, You are not authorized to perform this action!"
+                response_data["code"] = 404
+                response_data["message"] = "Stock lot not found!"                    
             
             return response_data
         except TypeError as e:
@@ -133,30 +121,23 @@ class NaidashStockLot(models.Model):
         try:
             data = dict()
             response_data = dict()
-            is_courier_manager = self.env.user.has_group('courier_manage.courier_management_manager_custom_group')
+            stock_lot = self.env['stock.lot'].browse(int(stock_lot_id))
             
-            # Courier Admins/Managers can search for stock lots
-            if is_courier_manager:
-                stock_lot = self.env['stock.lot'].browse(int(stock_lot_id))
-                
-                if stock_lot:
-                    data["id"] = stock_lot.id
-                    data["lot_or_serial_no"] = stock_lot.name
-                    data["internal_reference_no"] = stock_lot.ref or ""
-                    data["description"] = stock_lot.note or ""
-                    data["quantity"] = stock_lot.product_qty
-                    data["product"] = {"id": stock_lot.product_id.id, "name": stock_lot.product_id.name} if stock_lot.product_id else {}
-                    data["company"] = {"id": stock_lot.company_id.id, "name": stock_lot.company_id.name} if stock_lot.company_id else {}
-                                        
-                    response_data["code"] = 200
-                    response_data["message"] = "Success"
-                    response_data["data"] = data
-                else:
-                    response_data["code"] = 404
-                    response_data["message"] = "Stock lot not found!"
-            else: 
-                response_data["code"] = 403               
-                response_data["message"] = f"{self.env.user.name}, You are not authorized to perform this action!"
+            if stock_lot:
+                data["id"] = stock_lot.id
+                data["lot_or_serial_no"] = stock_lot.name
+                data["internal_reference_no"] = stock_lot.ref or ""
+                data["description"] = stock_lot.note or ""
+                data["quantity"] = stock_lot.product_qty
+                data["product"] = {"id": stock_lot.product_id.id, "name": stock_lot.product_id.name} if stock_lot.product_id else {}
+                data["company"] = {"id": stock_lot.company_id.id, "name": stock_lot.company_id.name} if stock_lot.company_id else {}
+                                    
+                response_data["code"] = 200
+                response_data["message"] = "Success"
+                response_data["data"] = data
+            else:
+                response_data["code"] = 404
+                response_data["message"] = "Stock lot not found!"
             
             return response_data
         except Exception as e:
@@ -170,34 +151,27 @@ class NaidashStockLot(models.Model):
         try:
             response_data = dict()
             all_stock_lots = []
-            is_courier_manager = self.env.user.has_group('courier_manage.courier_management_manager_custom_group')
+            stock_lots = self.env['stock.lot'].search([])
             
-            # Courier Admins/Managers can search for stock lots
-            if is_courier_manager:                                                                      
-                stock_lots = self.env['stock.lot'].search([])
-                
-                if stock_lots:
-                    for stock_lot in stock_lots:
-                        data = dict()
-                        data["id"] = stock_lot.id
-                        data["lot_or_serial_no"] = stock_lot.name
-                        data["internal_reference_no"] = stock_lot.ref or ""
-                        data["description"] = stock_lot.note or ""
-                        data["quantity"] = stock_lot.product_qty
-                        data["product"] = {"id": stock_lot.product_id.id, "name": stock_lot.product_id.name} if stock_lot.product_id else {}
-                        data["company"] = {"id": stock_lot.company_id.id, "name": stock_lot.company_id.name} if stock_lot.company_id else {}
-                        
-                        all_stock_lots.append(data)
+            if stock_lots:
+                for stock_lot in stock_lots:
+                    data = dict()
+                    data["id"] = stock_lot.id
+                    data["lot_or_serial_no"] = stock_lot.name
+                    data["internal_reference_no"] = stock_lot.ref or ""
+                    data["description"] = stock_lot.note or ""
+                    data["quantity"] = stock_lot.product_qty
+                    data["product"] = {"id": stock_lot.product_id.id, "name": stock_lot.product_id.name} if stock_lot.product_id else {}
+                    data["company"] = {"id": stock_lot.company_id.id, "name": stock_lot.company_id.name} if stock_lot.company_id else {}
                     
-                    response_data["code"] = 200
-                    response_data["message"] = "Success"
-                    response_data["data"] = all_stock_lots
-                else:
-                    response_data["code"] = 404
-                    response_data["message"] = "Stock lot not found!"
-            else: 
-                response_data["code"] = 403
-                response_data["message"] = f"{self.env.user.name}, You are not authorized to perform this action!"
+                    all_stock_lots.append(data)
+                
+                response_data["code"] = 200
+                response_data["message"] = "Success"
+                response_data["data"] = all_stock_lots
+            else:
+                response_data["code"] = 404
+                response_data["message"] = "Stock lot not found!"
             
             return response_data
         except Exception as e:

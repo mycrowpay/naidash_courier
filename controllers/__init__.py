@@ -14,4 +14,6 @@ from . import tax
 from . import invoice
 from . import map
 from . import shipment
+from . import stock_warehouse
 from . import stock_lot
+from . import stock_picking

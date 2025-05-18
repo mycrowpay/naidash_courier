@@ -9,7 +9,7 @@ from odoo.service.security import check_session
 
 logger = logging.getLogger(__name__)
 
-class StockPicking(http.Controller):
+class NaidashStockPicking(http.Controller):
     @route('/api/v1/stock_picking', methods=['POST'], auth='user', type='json')
     def create_stock_picking(self, **kw):
         """Create the stock picking details

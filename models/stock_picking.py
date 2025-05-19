@@ -142,9 +142,15 @@ class NaidashStockPicking(models.Model):
         try:
             response_data = dict()
             items_to_receive = []
+            logged_in_user = self.env.user
             line_items = request_data.get("line_items")
             
-            stock_picking = self.env['stock.picking'].browse(int(stock_picking_id))
+            stock_picking = self.env['stock.picking'].search(
+                [
+                    ("id", "=", int(stock_picking_id)),
+                    ("company_id", "=", logged_in_user.company_id.id)
+                ]
+            )          
             
             if stock_picking:
                 stock_picking_details = dict()
@@ -265,7 +271,12 @@ class NaidashStockPicking(models.Model):
             response_data = dict()
             logged_in_user = self.env.user
             
-            stock_picking = self.env['stock.picking'].browse(int(stock_picking_id))
+            stock_picking = self.env['stock.picking'].search(
+                [
+                    ("id", "=", int(stock_picking_id)),
+                    ("company_id", "=", logged_in_user.company_id.id)
+                ]
+            )
             
             if stock_picking:
                 data["id"] = stock_picking.id
@@ -335,9 +346,10 @@ class NaidashStockPicking(models.Model):
         
         try:
             response_data = dict()
-            search_criteria = list()
             all_stock_pickings = []
             logged_in_user = self.env.user
+            search_criteria = [("company_id", "=", logged_in_user.company_id.id)]
+            
             
             if query_params.get("stock_picking_type_code"):
                 stock_picking_type_code = query_params.get("stock_picking_type_code")

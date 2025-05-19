@@ -122,8 +122,14 @@ class NaidashStockWarehouse(http.Controller):
             ('Content-Type', 'application/json')
         ]
                 
-        try:           
-            warehouse_details = request.env['stock.warehouse'].get_all_the_warehouses()
+        try:
+            query_params = dict()
+            is_active = request.params.get('active')
+                
+            if is_active:
+                query_params["active"] = is_active
+                            
+            warehouse_details = request.env['stock.warehouse'].get_all_the_warehouses(query_params)
             status_code = warehouse_details.get("code")
             
             if status_code == 404:

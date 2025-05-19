@@ -134,7 +134,15 @@ class NaidashStockPickingType(models.Model):
                 
         try:
             response_data = dict()
-            stock_picking_type = self.env['stock.picking.type'].browse(int(stock_picking_type_id))
+            logged_in_user = self.env.user            
+
+            stock_picking_type = self.env['stock.picking.type'].search(
+                [
+                    ("id", "=", int(stock_picking_type_id)),
+                    ("company_id", "=", logged_in_user.company_id.id),
+                    ("active", "in", [True, False])
+                ]
+            )
             
             if stock_picking_type:
                 stock_picking_type_details = dict()
@@ -239,7 +247,13 @@ class NaidashStockPickingType(models.Model):
             response_data = dict()
             logged_in_user = self.env.user
             
-            stock_picking_type = self.env['stock.picking.type'].browse(int(stock_picking_type_id))
+            stock_picking_type = self.env['stock.picking.type'].search(
+                [
+                    ("id", "=", int(stock_picking_type_id)),
+                    ("company_id", "=", logged_in_user.company_id.id),
+                    ("active", "in", [True, False])
+                ]
+            )
             
             if stock_picking_type:
                 data["id"] = stock_picking_type.id
@@ -250,6 +264,7 @@ class NaidashStockPickingType(models.Model):
                 data["create_lot_or_serial_no"] = stock_picking_type.use_create_lots
                 data["use_existing_lot_or_serial_no"] = stock_picking_type.use_existing_lots
                 data["sequence_code"] = stock_picking_type.sequence_code
+                data["active"] = stock_picking_type.active
                 data["sequence"] = {"id": stock_picking_type.sequence_id.id, "name": stock_picking_type.sequence_id.name} if stock_picking_type.sequence_id else {}
                 data["warehouse"] = {"id": stock_picking_type.warehouse_id.id, "name": stock_picking_type.warehouse_id.name} if stock_picking_type.warehouse_id else {}
                 data["company"] = {"id": stock_picking_type.company_id.id, "name": stock_picking_type.company_id.name} if stock_picking_type.company_id else {}
@@ -294,6 +309,12 @@ class NaidashStockPickingType(models.Model):
                 search_criteria.append(
                     ('warehouse_id', '=', int(warehouse_id))
                 )
+                
+            if query_params.get("active") == True or query_params.get("active") == False:
+                is_active = query_params.get("active")
+                search_criteria.append(
+                    ("active", "=", is_active)
+                )
             
             stock_picking_types = self.env['stock.picking.type'].search(search_criteria, order='name asc')
             
@@ -308,6 +329,7 @@ class NaidashStockPickingType(models.Model):
                     data["create_lot_or_serial_no"] = stock_picking_type.use_create_lots
                     data["use_existing_lot_or_serial_no"] = stock_picking_type.use_existing_lots
                     data["sequence_code"] = stock_picking_type.sequence_code
+                    data["active"] = stock_picking_type.active
                     data["sequence"] = {"id": stock_picking_type.sequence_id.id, "name": stock_picking_type.sequence_id.name} if stock_picking_type.sequence_id else {}
                     data["warehouse"] = {"id": stock_picking_type.warehouse_id.id, "name": stock_picking_type.warehouse_id.name} if stock_picking_type.warehouse_id else {}
                     data["company"] = {"id": stock_picking_type.company_id.id, "name": stock_picking_type.company_id.name} if stock_picking_type.company_id else {}

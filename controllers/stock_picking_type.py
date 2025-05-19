@@ -126,12 +126,16 @@ class NaidashStockPickingType(http.Controller):
             query_params = dict()
             the_operation_type = request.params.get('operation_type')
             the_warehouse_id = request.params.get('warehouse_id')
+            is_active = request.params.get('active')
             
             if the_operation_type:
                 query_params["operation_type"] = the_operation_type
                 
             if the_warehouse_id:
                 query_params["warehouse_id"] = the_warehouse_id
+                
+            if is_active:
+                query_params["active"] = is_active
                             
             stock_picking_type_details = request.env['stock.picking.type'].get_all_the_stock_picking_types(query_params)
             status_code = stock_picking_type_details.get("code")

@@ -77,7 +77,14 @@ class NaidashStockLot(models.Model):
                 
         try:
             response_data = dict()
-            stock_lot = self.env['stock.lot'].browse(int(stock_lot_id))
+            logged_in_user = self.env.user
+            
+            stock_lot = self.env['stock.lot'].search(
+                [
+                    ("id", "=", int(stock_lot_id)),
+                    ("company_id", "=", logged_in_user.company_id.id)
+                ]
+            )
             
             if stock_lot:
                 stock_lot_details = dict()
@@ -121,7 +128,14 @@ class NaidashStockLot(models.Model):
         try:
             data = dict()
             response_data = dict()
-            stock_lot = self.env['stock.lot'].browse(int(stock_lot_id))
+            logged_in_user = self.env.user
+            
+            stock_lot = self.env['stock.lot'].search(
+                [
+                    ("id", "=", int(stock_lot_id)),
+                    ("company_id", "=", logged_in_user.company_id.id)
+                ]
+            )            
             
             if stock_lot:
                 data["id"] = stock_lot.id
@@ -151,7 +165,10 @@ class NaidashStockLot(models.Model):
         try:
             response_data = dict()
             all_stock_lots = []
-            stock_lots = self.env['stock.lot'].search([])
+            logged_in_user = self.env.user
+            search_criteria = [("company_id", "=", logged_in_user.company_id.id)]
+            
+            stock_lots = self.env['stock.lot'].search(search_criteria)
             
             if stock_lots:
                 for stock_lot in stock_lots:

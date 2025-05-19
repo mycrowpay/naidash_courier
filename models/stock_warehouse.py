@@ -77,7 +77,15 @@ class NaidashStockWarehouse(models.Model):
                 
         try:
             response_data = dict()
-            warehouse = self.env['stock.warehouse'].browse(int(warehouse_id))
+            logged_in_user = self.env.user
+            
+            warehouse = self.env['stock.warehouse'].search(
+                [
+                    ("id", "=", int(warehouse_id)),
+                    ("company_id", "=", logged_in_user.company_id.id),
+                    ("active", "in", [True, False])
+                ]
+            )
             
             if warehouse:
                 warehouse_details = dict()
@@ -87,6 +95,9 @@ class NaidashStockWarehouse(models.Model):
 
                 if request_data.get("code"):
                     warehouse_details["code"] = request_data.get("code")
+                    
+                if request_data.get("active") == True or request_data.get("active") == False:
+                    warehouse_details["active"] = request_data.get("active")
                     
                 if request_data.get("resupply_from_warehouse_ids"):
                     warehouse_details["resupply_wh_ids"] = request_data.get("resupply_from_warehouse_ids")
@@ -134,12 +145,19 @@ class NaidashStockWarehouse(models.Model):
             response_data = dict()
             logged_in_user = self.env.user
             
-            warehouse = self.env['stock.warehouse'].browse(int(warehouse_id))
+            warehouse = self.env['stock.warehouse'].search(
+                [
+                    ("id", "=", int(warehouse_id)),
+                    ("company_id", "=", logged_in_user.company_id.id),
+                    ("active", "in", [True, False])
+                ]
+            )
             
             if warehouse:
                 data["id"] = warehouse.id
                 data["name"] = warehouse.name
                 data["code"] = warehouse.code
+                data["active"] = warehouse.active
                 data["partner"] = {"id": warehouse.partner_id.id, "name": warehouse.partner_id.name} if warehouse.partner_id else {}
                 data["warehouse_view_location"] = {"id": warehouse.view_location_id.id, "name": warehouse.view_location_id.name} if warehouse.view_location_id else {}
                 data["stock_location"] = {"id": warehouse.lot_stock_id.id, "name": warehouse.lot_stock_id.name} if warehouse.lot_stock_id else {}
@@ -175,7 +193,7 @@ class NaidashStockWarehouse(models.Model):
             logger.error(f"The following error ocurred while fetching the warehouse details:\n\n{str(e)}")
             raise e
         
-    def get_all_the_warehouses(self):
+    def get_all_the_warehouses(self, query_params):
         """Get all the warehouses 
         """        
         
@@ -183,7 +201,15 @@ class NaidashStockWarehouse(models.Model):
             response_data = dict()
             all_warehouses = []
             logged_in_user = self.env.user
-            warehouses = self.env['stock.warehouse'].search([], order='name asc')
+            search_criteria = [("company_id", "=", logged_in_user.company_id.id)]
+            
+            if query_params.get("active") == True or query_params.get("active") == False:
+                is_active = query_params.get("active")
+                search_criteria.append(
+                    ("active", "=", is_active)
+                )
+                            
+            warehouses = self.env['stock.warehouse'].search(search_criteria, order='name asc')
             
             if warehouses:
                 for warehouse in warehouses:
@@ -191,6 +217,7 @@ class NaidashStockWarehouse(models.Model):
                     data["id"] = warehouse.id
                     data["name"] = warehouse.name
                     data["code"] = warehouse.code
+                    data["active"] = warehouse.active
                     data["partner"] = {"id": warehouse.partner_id.id, "name": warehouse.partner_id.name} if warehouse.partner_id else {}
                     data["warehouse_view_location"] = {"id": warehouse.view_location_id.id, "name": warehouse.view_location_id.name} if warehouse.view_location_id else {}
                     data["stock_location"] = {"id": warehouse.lot_stock_id.id, "name": warehouse.lot_stock_id.name} if warehouse.lot_stock_id else {}

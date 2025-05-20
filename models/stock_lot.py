@@ -101,6 +101,9 @@ class NaidashStockLot(models.Model):
                 if request_data.get("description"):
                     stock_lot_details["note"] = request_data.get("description")
                     
+                if request_data.get("stock_location_id"):
+                    stock_lot_details["location_id"] = int(request_data.get("stock_location_id"))
+                    
                 # Update stock lot details
                 if stock_lot_details:
                     stock_lot.write(stock_lot_details)
@@ -144,6 +147,7 @@ class NaidashStockLot(models.Model):
                 data["description"] = stock_lot.note or ""
                 data["quantity"] = stock_lot.product_qty
                 data["product"] = {"id": stock_lot.product_id.id, "name": stock_lot.product_id.name} if stock_lot.product_id else {}
+                data["stock_location"] = {"id": stock_lot.location_id.id, "name": stock_lot.location_id.name} if stock_lot.location_id else {}
                 data["company"] = {"id": stock_lot.company_id.id, "name": stock_lot.company_id.name} if stock_lot.company_id else {}
                                     
                 response_data["code"] = 200
@@ -179,6 +183,7 @@ class NaidashStockLot(models.Model):
                     data["description"] = stock_lot.note or ""
                     data["quantity"] = stock_lot.product_qty
                     data["product"] = {"id": stock_lot.product_id.id, "name": stock_lot.product_id.name} if stock_lot.product_id else {}
+                    data["stock_location"] = {"id": stock_lot.location_id.id, "name": stock_lot.location_id.name} if stock_lot.location_id else {}
                     data["company"] = {"id": stock_lot.company_id.id, "name": stock_lot.company_id.name} if stock_lot.company_id else {}
                     
                     all_stock_lots.append(data)

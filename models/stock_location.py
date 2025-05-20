@@ -202,6 +202,19 @@ class NaidashStockLocation(models.Model):
                 data["parent_stock_location"] = {"id": stock_location.location_id.id, "name": stock_location.location_id.name} if stock_location.location_id else {}
                 data["warehouse"] = {"id": stock_location.warehouse_id.id, "name": stock_location.warehouse_id.name} if stock_location.warehouse_id else {}
                 data["company"] = {"id": stock_location.company_id.id, "name": stock_location.company_id.name} if stock_location.company_id else {}
+                data["stock_quantities"] = [
+                    {
+                        "id": item.id, 
+                        "quantity_on_hand": item.quantity,
+                        "quantity_available": item.available_quantity,
+                        "value": item.value,
+                        "stock_location": {"id": item.location_id.id, "name": item.location_id.name} if item.location_id else {},
+                        "stock_lot": {"id": item.lot_id.id, "name": item.lot_id.name} if item.lot_id else {},
+                        "product": {"id": item.product_id.id, "name": item.product_id.name} if item.product_id else {},
+                        "uom": {"id": item.product_uom_id.id, "name": item.product_uom_id.name} if item.product_uom_id else {},
+                        "company": {"id": item.company_id.id, "name": item.company_id.name} if item.company_id else {}
+                    } for item in stock_location.quant_ids
+                ] if stock_location.quant_ids else []
                                     
                 response_data["code"] = 200
                 response_data["message"] = "Success"
@@ -270,6 +283,19 @@ class NaidashStockLocation(models.Model):
                     data["parent_stock_location"] = {"id": stock_location.location_id.id, "name": stock_location.location_id.name} if stock_location.location_id else {}
                     data["warehouse"] = {"id": stock_location.warehouse_id.id, "name": stock_location.warehouse_id.name} if stock_location.warehouse_id else {}
                     data["company"] = {"id": stock_location.company_id.id, "name": stock_location.company_id.name} if stock_location.company_id else {}
+                    data["stock_quantities"] = [
+                        {
+                            "id": item.id, 
+                            "quantity_on_hand": item.quantity,
+                            "quantity_available": item.available_quantity,
+                            "value": item.value,
+                            "stock_location": {"id": item.location_id.id, "name": item.location_id.name} if item.location_id else {},
+                            "stock_lot": {"id": item.lot_id.id, "name": item.lot_id.name} if item.lot_id else {},
+                            "product": {"id": item.product_id.id, "name": item.product_id.name} if item.product_id else {},
+                            "uom": {"id": item.product_uom_id.id, "name": item.product_uom_id.name} if item.product_uom_id else {},
+                            "company": {"id": item.company_id.id, "name": item.company_id.name} if item.company_id else {}
+                        } for item in stock_location.quant_ids
+                    ] if stock_location.quant_ids else []
                     
                     all_stock_locations.append(data)
                 

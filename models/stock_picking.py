@@ -21,6 +21,7 @@ class NaidashStockPicking(models.Model):
             data = dict()
             response_data = dict()
             items_to_receive = []
+            logged_in_user = self.env.user            
                                     
             partner_id = request_data.get("partner_id")
             stock_picking_type_id = request_data.get("stock_picking_type_id")
@@ -63,7 +64,12 @@ class NaidashStockPicking(models.Model):
                     return response_data                
             
             partner = self.env['res.partner'].browse(int(partner_id))
-            stock_picking_type = self.env['stock.picking.type'].browse(int(stock_picking_type_id))
+            stock_picking_type = self.env['stock.picking.type'].search(
+                [
+                    ("id", "=", int(stock_picking_type_id)),
+                    ("company_id", "=", logged_in_user.company_id.id)
+                ]
+            )            
             
             if partner:
                 vals["partner_id"] = partner.id
@@ -73,29 +79,15 @@ class NaidashStockPicking(models.Model):
                 return response_data                
             
             if stock_picking_type:
-                vals["picking_type_id"] = stock_picking_type.id
+                vals["picking_type_id"] = stock_picking_type.id               
             else:
                 response_data["code"] = 404
                 response_data["message"] = "Operation type not found!"
                 return response_data
             
             for item in line_items:
-                items = dict()
+                stock_move = dict()
                 product_id = item.get("product_id")
-                # source_location_id = item.get("source_location_id")
-                # destination_location_id = item.get("destination_location_id")
-                
-                # if source_location_id:
-                #     source_location = self.env['stock.location'].browse(int(source_location_id))
-                    
-                #     if source_location:
-                #         items["location_id"] = source_location.id
-                #         items["location_dest_id"] = destination_location_id
-                #     else:
-                #         response_data["code"] = 404
-                #         response_data["message"] = "Source location not found!"
-                #         return response_data
-                # else:
                 
                 if product_id:
                     product = self.env['product.product'].search(
@@ -106,12 +98,28 @@ class NaidashStockPicking(models.Model):
                     )
                     
                     if product:
-                        items["product_id"] = product.id
-                        items["description_picking"] = product.name
-                        items["product_uom_qty"] = float(item.get("quantity")) if float(item.get("quantity")) > 0 else 1
-                    
-                if items:                        
-                    items_to_receive.append((0, 0, items))
+                        stock_move["name"] = product.name,
+                        stock_move["product_id"] = product.id
+                        stock_move["description_picking"] = product.name
+                        stock_move["product_uom_qty"] = float(item.get("quantity")) if float(item.get("quantity")) > 0 else 1
+                        #  stock_move["lot_ids"]
+                        
+                        if stock_picking_type.default_location_src_id:
+                            stock_move["location_id"] = stock_picking_type.default_location_src_id.id
+                        elif partner.property_stock_supplier:
+                            stock_move["location_id"] = partner.property_stock_supplier.id
+                        else:
+                            stock_move["location_id"] = self.env['stock.warehouse']._get_partner_locations()
+
+                        if stock_picking_type.default_location_dest_id:
+                            stock_move["location_dest_id"] = stock_picking_type.default_location_dest_id.id
+                        elif partner.property_stock_customer:
+                            stock_move["location_dest_id"] = partner.property_stock_customer.id
+                        else:
+                            stock_move["location_dest_id"] = self.env['stock.warehouse']._get_partner_locations()
+                            
+                if stock_move:                        
+                    items_to_receive.append((0, 0, stock_move))
                     
             if items_to_receive:
                 vals["move_ids_without_package"] = items_to_receive
@@ -125,14 +133,14 @@ class NaidashStockPicking(models.Model):
                     response_data["data"] = data
                 else:
                     response_data["code"] = 204
-                    response_data["message"] = "Failed to create the stock receipt"
+                    response_data["message"] = "Failed to create the stock picking"
                     return response_data
             return response_data
         except SessionExpiredException as e:
             logger.error(f"The session has expired:\n\n{str(e)}")
             raise e
         except Exception as e:
-            logger.error(f"An error ocurred while creating the stock picking receipt:\n\n{str(e)}")
+            logger.error(f"An error ocurred while creating the stock picking details:\n\n{str(e)}")
             raise e
         
     def edit_the_stock_picking(self, stock_picking_id, request_data):
@@ -315,15 +323,27 @@ class NaidashStockPicking(models.Model):
                 data["partner"] = {"id": stock_picking.partner_id.id, "name": stock_picking.partner_id.name} if stock_picking.partner_id else {}
                 data["stock_picking_type"] = {"id": stock_picking.picking_type_id.id, "name": stock_picking.picking_type_id.name} if stock_picking.picking_type_id else {}
                 data["company"] = {"id": stock_picking.company_id.id, "name": stock_picking.company_id.name} if stock_picking.company_id else {}
-                data["assigned_user"] = {"id": stock_picking.user_id.id, "name": stock_picking.user_id.name} if stock_picking.user_id else {}                
-                data["line_items"] = [
+                data["stock_lot"] = {"id": stock_picking.lot_id.id, "name": stock_picking.lot_id.name} if stock_picking.lot_id else {}
+                data["assigned_user"] = {"id": stock_picking.user_id.id, "name": stock_picking.user_id.name} if stock_picking.user_id else {}
+                data["stock_moves"] = [
                     {
-                        "id": item.id, 
-                        "description": item.description_picking or "",
-                        "quantity": item.product_uom_qty,
-                        "product": {"id": item.product_id.id, "name": item.product_id.name, "code": item.product_id.default_code or "", "uom": item.product_id.uom_id.name} if item.product_id else {}
-                    } for item in stock_picking.move_ids_without_package
-                ] if stock_picking.move_ids_without_package else []                
+                        "id": stock_move.id,
+                        "description": stock_move.description_picking or "",
+                        "quantity": stock_move.product_uom_qty,
+                        "product": {"id": stock_move.product_id.id, "name": stock_move.product_id.name} if stock_move.product_id else {},
+                        "stock_move_lines": [
+                            {
+                                "id": stock_move_line.id, 
+                                "quantity": stock_move_line.quantity,
+                                "product": {"id": stock_move_line.product_id.id, "name": stock_move_line.product_id.name} if stock_move_line.product_id else {},
+                                "uom": {"id": stock_move_line.product_uom_id.id, "name": stock_move_line.product_uom_id.name} if stock_move_line.product_uom_id else {},
+                                "lot": {"id": stock_move_line.lot_id.id, "name": stock_move_line.lot_id.name} if stock_move_line.lot_id else {},
+                                "destination_stock_location": {"id": stock_move_line.location_dest_id.id, "name": stock_move_line.location_dest_id.name} if stock_move_line.location_dest_id else {}
+                            } for stock_move_line in stock_move.move_line_ids
+                        ] if stock_move.move_line_ids else [] # stock_move.move_line_ids_without_package
+                        
+                    } for stock_move in stock_picking.move_ids_without_package
+                ] if stock_picking.move_ids_without_package else []
                                     
                 response_data["code"] = 200
                 response_data["message"] = "Success"
@@ -414,13 +434,24 @@ class NaidashStockPicking(models.Model):
                     data["stock_picking_type"] = {"id": stock_picking.picking_type_id.id, "name": stock_picking.picking_type_id.name} if stock_picking.picking_type_id else {}
                     data["company"] = {"id": stock_picking.company_id.id, "name": stock_picking.company_id.name} if stock_picking.company_id else {}
                     data["assigned_user"] = {"id": stock_picking.user_id.id, "name": stock_picking.user_id.name} if stock_picking.user_id else {}                
-                    data["line_items"] = [
+                    data["stock_moves"] = [
                         {
-                            "id": item.id, 
-                            "description": item.description_picking or "",
-                            "quantity": item.product_uom_qty,
-                            "product": {"id": item.product_id.id, "name": item.product_id.name, "code": item.product_id.default_code or "", "uom": item.product_id.uom_id.name} if item.product_id else {}
-                        } for item in stock_picking.move_ids_without_package
+                            "id": stock_move.id,
+                            "description": stock_move.description_picking or "",
+                            "quantity": stock_move.product_uom_qty,
+                            "product": {"id": stock_move.product_id.id, "name": stock_move.product_id.name} if stock_move.product_id else {},
+                            "stock_move_lines": [
+                                {
+                                    "id": stock_move_line.id, 
+                                    "quantity": stock_move_line.quantity,
+                                    "product": {"id": stock_move_line.product_id.id, "name": stock_move_line.product_id.name} if stock_move_line.product_id else {},
+                                    "uom": {"id": stock_move_line.product_uom_id.id, "name": stock_move_line.product_uom_id.name} if stock_move_line.product_uom_id else {},
+                                    "lot": {"id": stock_move_line.lot_id.id, "name": stock_move_line.lot_id.name} if stock_move_line.lot_id else {},
+                                    "destination_stock_location": {"id": stock_move_line.location_dest_id.id, "name": stock_move_line.location_dest_id.name} if stock_move_line.location_dest_id else {}
+                                } for stock_move_line in stock_move.move_line_ids
+                            ] if stock_move.move_line_ids else [] # stock_move.move_line_ids_without_package
+                            
+                        } for stock_move in stock_picking.move_ids_without_package
                     ] if stock_picking.move_ids_without_package else []
                     
                     all_stock_pickings.append(data)

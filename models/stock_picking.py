@@ -19,14 +19,14 @@ class NaidashStockPicking(models.Model):
         try:
             vals = dict()
             data = dict()
-            response_data = dict()
+            response_data = dict(code=204,message="Failed to create the stock picking")
             items_to_receive = []
             logged_in_user = self.env.user            
                                     
             partner_id = request_data.get("partner_id")
             stock_picking_type_id = request_data.get("stock_picking_type_id")
             assigned_user_id = request_data.get("assigned_user_id")
-            line_items = request_data.get("line_items")
+            stock_moves = request_data.get("stock_moves")
             # procurement_group_id = request_data.get("procurement_group_id")
             
             vals["scheduled_date"] = request_data.get("date_scheduled")
@@ -43,18 +43,23 @@ class NaidashStockPicking(models.Model):
                 response_data["message"] = "Bad Request! Expected the stock picking type id"
                 return response_data
             
-            if not line_items:
+            if not stock_moves:
                 response_data["code"] = 400
-                response_data["message"] = "Bad Request! Add the items to receive"
+                response_data["message"] = "Bad Request! Add the items to be received, delivered or transferred"
                 return response_data
                             
-            if isinstance(line_items, list) == False:
+            if isinstance(stock_moves, list) == False:
                 response_data["code"] = 422
-                response_data["message"] = "Unprocessable Content! Expected a list of objects in `line_items`"
+                response_data["message"] = "Unprocessable Content! Expected a list of objects in `stock_moves`"
                 return response_data
             
             if assigned_user_id:
-                user = self.env['res.users'].browse(int(assigned_user_id))
+                user = self.env['res.users'].search(
+                    [
+                        ('id', '=', int(assigned_user_id)),
+                        ('company_id', '=', logged_in_user.company_id.id)
+                    ]
+                )
                 
                 if user:
                     vals["user_id"] = user.id
@@ -69,7 +74,7 @@ class NaidashStockPicking(models.Model):
                     ("id", "=", int(stock_picking_type_id)),
                     ("company_id", "=", logged_in_user.company_id.id)
                 ]
-            )            
+            )
             
             if partner:
                 vals["partner_id"] = partner.id
@@ -85,7 +90,7 @@ class NaidashStockPicking(models.Model):
                 response_data["message"] = "Operation type not found!"
                 return response_data
             
-            for item in line_items:
+            for item in stock_moves:
                 stock_move = dict()
                 product_id = item.get("product_id")
                 
@@ -117,6 +122,10 @@ class NaidashStockPicking(models.Model):
                             stock_move["location_dest_id"] = partner.property_stock_customer.id
                         else:
                             stock_move["location_dest_id"] = self.env['stock.warehouse']._get_partner_locations()
+                    else:
+                        response_data["code"] = 404
+                        response_data["message"] = "Product not found!"
+                        return response_data                            
                             
                 if stock_move:                        
                     items_to_receive.append((0, 0, stock_move))
@@ -131,10 +140,6 @@ class NaidashStockPicking(models.Model):
                     response_data["code"] = 201
                     response_data["message"] = "Created successfully"
                     response_data["data"] = data
-                else:
-                    response_data["code"] = 204
-                    response_data["message"] = "Failed to create the stock picking"
-                    return response_data
             return response_data
         except SessionExpiredException as e:
             logger.error(f"The session has expired:\n\n{str(e)}")
@@ -149,16 +154,18 @@ class NaidashStockPicking(models.Model):
                 
         try:
             response_data = dict()
-            items_to_receive = []
+            stock_moves_list = []
             logged_in_user = self.env.user
-            line_items = request_data.get("line_items")
+            stock_moves = request_data.get("stock_moves")
+            stock_picking_type = self.env['stock.picking.type']
+            partner = self.env['res.partner']
             
             stock_picking = self.env['stock.picking'].search(
                 [
                     ("id", "=", int(stock_picking_id)),
                     ("company_id", "=", logged_in_user.company_id.id)
                 ]
-            )          
+            )
             
             if stock_picking:
                 stock_picking_details = dict()
@@ -174,18 +181,23 @@ class NaidashStockPicking(models.Model):
                                     
                 if request_data.get("assigned_user_id"):
                     assigned_user_id = request_data.get("assigned_user_id")
-                    user = self.env['res.users'].browse(int(assigned_user_id))
+                    user = self.env['res.users'].search(
+                        [
+                            ('id', '=', int(assigned_user_id)),
+                            ('company_id', '=', logged_in_user.company_id.id)
+                        ]
+                    )
                     
                     if user:
                         stock_picking_details["user_id"] = user.id
                     else:
                         response_data["code"] = 404
                         response_data["message"] = "User not found!"
-                        return response_data                
+                        return response_data
                 
                 if request_data.get("partner_id"):
                     partner_id = request_data.get("partner_id")
-                    partner = self.env['res.partner'].browse(int(partner_id))
+                    partner = partner.browse(int(partner_id))
                     
                     if partner:
                         stock_picking_details["partner_id"] = partner.id
@@ -196,8 +208,13 @@ class NaidashStockPicking(models.Model):
                     
                 if request_data.get("stock_picking_type_id"):
                     stock_picking_type_id = request_data.get("stock_picking_type_id")                    
-                    stock_picking_type = self.env['stock.picking.type'].browse(int(stock_picking_type_id))                    
-                    
+                    stock_picking_type = stock_picking_type.search(
+                        [
+                            ("id", "=", int(stock_picking_type_id)),
+                            ("company_id", "=", logged_in_user.company_id.id)
+                        ]
+                    )
+                                        
                     if stock_picking_type:
                         stock_picking_details["picking_type_id"] = stock_picking_type.id
                     else:
@@ -205,12 +222,12 @@ class NaidashStockPicking(models.Model):
                         response_data["message"] = "Operation type not found!"
                         return response_data
                     
-                if line_items and isinstance(line_items, list):
-                    for item in line_items:
-                        item_to_update = dict()
-                        item_to_create = dict()
-                        item_id = item.get("id")
-                        product_id = item.get("product_id")
+                if stock_moves and isinstance(stock_moves, list):
+                    for stock_move in stock_moves:
+                        stock_move_to_update = dict()
+                        stock_move_to_create = dict()
+                        stock_move_id = stock_move.get("id")
+                        product_id = stock_move.get("product_id")
                         
                         if product_id:
                             product = self.env['product.product'].search(
@@ -220,32 +237,64 @@ class NaidashStockPicking(models.Model):
                                 ]
                             )
                             
-                            if product and not item_id:
-                                # If the product exists and the item_id is not present, we will create a new item
-                                item_to_create["product_id"] = product.id
-                                item_to_create["description_picking"] = product.name
-                                item_to_create["product_uom_qty"] = float(item.get("quantity")) if float(item.get("quantity")) > 0 else 1                            
+                            if product and not stock_move_id:
+                                # If the product exists and the stock_move_id is not present, we will create a new stock move
+                                stock_move_to_create["name"] = product.name
+                                stock_move_to_create["product_id"] = product.id
+                                stock_move_to_create["description_picking"] = product.name
+                                stock_move_to_create["product_uom_qty"] = float(stock_move.get("quantity")) if float(stock_move.get("quantity")) > 0 else 1
+                                #  stock_move_to_create["lot_ids"]
                                 
-                                if item_to_create:
-                                    items_to_receive.append((0, 0, item_to_create))
-                            elif product and item_id:
-                                # If the product exists and the item_id is present, we will update the item                                
-                                item_to_update["product_id"] = product.id
-                                item_to_update["description_picking"] = product.name
+                                if (stock_picking_details.get("picking_type_id") and stock_picking_type.default_location_src_id) or stock_picking.picking_type_id.default_location_src_id:
+                                    stock_move_to_create["location_id"] = stock_picking_type.default_location_src_id.id if stock_picking_type.default_location_src_id else stock_picking.picking_type_id.default_location_src_id.id
+                                elif (stock_picking_details.get("partner_id") and partner.property_stock_supplier) or stock_picking.partner_id.property_stock_supplier:
+                                    stock_move_to_create["location_id"] = partner.property_stock_supplier.id if partner.property_stock_supplier else stock_picking.partner_id.property_stock_supplier.id
+                                else:
+                                    stock_move_to_create["location_id"] = self.env['stock.warehouse']._get_partner_locations()
+
+                                if (stock_picking_details.get("picking_type_id") and stock_picking_type.default_location_dest_id) or stock_picking.picking_type_id.default_location_dest_id:
+                                    stock_move_to_create["location_dest_id"] = stock_picking_type.default_location_dest_id.id if stock_picking_type.default_location_dest_id else stock_picking.picking_type_id.default_location_dest_id.id
+                                elif (stock_picking_details.get("partner_id") and partner.property_stock_customer) or stock_picking.partner_id.property_stock_customer:
+                                    stock_move_to_create["location_dest_id"] = partner.property_stock_customer.id if partner.property_stock_customer else stock_picking.partner_id.property_stock_customer.id
+                                else:
+                                    stock_move_to_create["location_dest_id"] = self.env['stock.warehouse']._get_partner_locations()
+                                
+                                if stock_move_to_create:
+                                    stock_moves_list.append((0, 0, stock_move_to_create))
+                            elif product and stock_move_id:
+                                # If the product exists and the stock_move_id is present, we will update the stock_move                                
+                                stock_move_to_update["name"] = product.name
+                                stock_move_to_update["product_id"] = product.id
+                                stock_move_to_update["description_picking"] = product.name
+                                #  stock_move_to_update["lot_ids"]
+                                
+                                if (stock_picking_details.get("picking_type_id") and stock_picking_type.default_location_src_id) or stock_picking.picking_type_id.default_location_src_id:
+                                    stock_move_to_update["location_id"] = stock_picking_type.default_location_src_id.id if stock_picking_type.default_location_src_id else stock_picking.picking_type_id.default_location_src_id.id
+                                elif (stock_picking_details.get("partner_id") and partner.property_stock_supplier) or stock_picking.partner_id.property_stock_supplier:
+                                    stock_move_to_update["location_id"] = partner.property_stock_supplier.id if partner.property_stock_supplier else stock_picking.partner_id.property_stock_supplier.id
+                                else:
+                                    stock_move_to_update["location_id"] = self.env['stock.warehouse']._get_partner_locations()
+
+                                if (stock_picking_details.get("picking_type_id") and stock_picking_type.default_location_dest_id) or stock_picking.picking_type_id.default_location_dest_id:
+                                    stock_move_to_update["location_dest_id"] = stock_picking_type.default_location_dest_id.id if stock_picking_type.default_location_dest_id else stock_picking.picking_type_id.default_location_dest_id.id
+                                elif (stock_picking_details.get("partner_id") and partner.property_stock_customer) or stock_picking.partner_id.property_stock_customer:
+                                    stock_move_to_update["location_dest_id"] = partner.property_stock_customer.id if partner.property_stock_customer else stock_picking.partner_id.property_stock_customer.id
+                                else:
+                                    stock_move_to_update["location_dest_id"] = self.env['stock.warehouse']._get_partner_locations()
                         
-                        if item.get("quantity"):
-                            item_to_update["product_uom_qty"] = float(item.get("quantity")) if float(item.get("quantity")) > 0 else 1
+                        if stock_move.get("quantity"):
+                            stock_move_to_update["product_uom_qty"] = float(stock_move.get("quantity")) if float(stock_move.get("quantity")) > 0 else 1
                         
-                        # Check if there are any line items to be deleted/removed
-                        if item.get("delete_record") == True:
-                            items_to_receive.append((2, int(item_id)))
+                        # Check if there are any line stock_moves to be deleted/removed
+                        if stock_move.get("delete_record") == True:
+                            stock_moves_list.append((2, int(stock_move_id)))
                         
-                        # Check if there are any line items to be updated
-                        if item.get("delete_record") == False and item_to_update:
-                            items_to_receive.append((1, int(item_id), item_to_update))                               
+                        # Check if there are any line stock_moves to be updated
+                        if stock_move.get("delete_record") == False and stock_move_to_update:
+                            stock_moves_list.append((1, int(stock_move_id), stock_move_to_update))                               
                         
-                    if items_to_receive:
-                        stock_picking_details["move_ids_without_package"] = items_to_receive                    
+                    if stock_moves_list:
+                        stock_picking_details["move_ids_without_package"] = stock_moves_list
                     
                 # Update stock picking details
                 if stock_picking_details:

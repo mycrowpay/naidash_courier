@@ -338,11 +338,52 @@ class NaidashStockMove(models.Model):
             
             if stock_move:
                 data["id"] = stock_move.id
-                data["name"] = stock_move.name or ""
-                data["status"] = {"id": stock_move.state, "name": dict(stock_move._fields['state'].selection).get(stock_move.state, stock_move.state)}
+                data["description"] = stock_move.description_picking or ""
+                data["quantity"] = stock_move.product_uom_qty
+                data["stock_move_line_quantity"] = stock_move.quantity
+                data["is_picked"] = stock_move.picked
+                data["is_locked"] = stock_move.is_locked
+                data["schedule_date"] = ""
+                data["due_date"] = ""
                 data["origin"] = stock_move.origin or ""
-                data["quantity_demanded"] = stock_move.product_uom_qty
-                data["quantity"] = stock_move.quantity
+                
+                # Display the scheduled date using the logged in user's timezone
+                if stock_move.date:
+                    user_timezone = logged_in_user.tz or pytz.utc
+                    user_timezone = pytz.timezone(user_timezone)
+                    scheduled_date = (stock_move.date).strftime("%Y-%m-%d %H:%M")
+                    scheduled_date = datetime.strftime(
+                        pytz.utc.localize(datetime.strptime(scheduled_date, "%Y-%m-%d %H:%M")).astimezone(user_timezone),
+                        "%Y-%m-%d %H:%M"
+                    )
+                    
+                    data["schedule_date"] = scheduled_date
+                    
+                # Display the due date using the logged in user's timezone
+                if stock_move.date_deadline:
+                    user_timezone = logged_in_user.tz or pytz.utc
+                    user_timezone = pytz.timezone(user_timezone)
+                    date_done = (stock_move.date_deadline).strftime("%Y-%m-%d %H:%M")
+                    date_done = datetime.strftime(
+                        pytz.utc.localize(datetime.strptime(date_done, "%Y-%m-%d %H:%M")).astimezone(user_timezone),
+                        "%Y-%m-%d %H:%M"
+                    )
+                    
+                    data["due_date"] = date_done
+                    
+                data["status"] = {"id": stock_move.state, "name": dict(stock_move._fields['state'].selection).get(stock_move.state, stock_move.state)}
+                data["stock_picking"] = {"id": stock_move.picking_id.id, "name": stock_move.picking_id.name} if stock_move.picking_id else {}
+                data["product"] = {"id": stock_move.product_id.id, "name": stock_move.product_id.name} if stock_move.product_id else {}
+                data["uom"] = {"id": stock_move.product_uom.id, "name": stock_move.product_uom.name} if stock_move.product_uom else {}
+                data["source_stock_location"] = {"id": stock_move.location_id.id, "name": stock_move.location_id.name} if stock_move.location_id else {}
+                data["destination_stock_location"] = {"id": stock_move.location_dest_id.id, "name": stock_move.location_dest_id.name} if stock_move.location_dest_id else {}
+                data["stock_lots"] = [
+                    {
+                        "id": lot.id, 
+                        "name": lot.name
+                    } for lot in stock_move.lot_ids
+                ] if stock_move.lot_ids else []
+                
                 data["stock_move_lines"] = [
                     {
                         "id": stock_move_line.id, 
@@ -350,62 +391,10 @@ class NaidashStockMove(models.Model):
                         "product": {"id": stock_move_line.product_id.id, "name": stock_move_line.product_id.name} if stock_move_line.product_id else {},
                         "uom": {"id": stock_move_line.product_uom_id.id, "name": stock_move_line.product_uom_id.name} if stock_move_line.product_uom_id else {},
                         "lot": {"id": stock_move_line.lot_id.id, "name": stock_move_line.lot_id.name} if stock_move_line.lot_id else {},
+                        "source_stock_location": {"id": stock_move_line.location_id.id, "name": stock_move_line.location_id.name} if stock_move_line.location_id else {},
                         "destination_stock_location": {"id": stock_move_line.location_dest_id.id, "name": stock_move_line.location_dest_id.name} if stock_move_line.location_dest_id else {}
                     } for stock_move_line in stock_move.move_line_ids
-                ] if stock_move.move_line_ids else [] # stock_move.move_line_ids_without_package                
-                # data["notes"] = stock_move.note or ""
-                # data["date_scheduled"] = ""
-                # data["date_processed"] = ""
-                
-                # # Display the scheduled time using the logged in user's timezone
-                # if stock_move.scheduled_date:
-                #     user_timezone = logged_in_user.tz or pytz.utc
-                #     user_timezone = pytz.timezone(user_timezone)
-                #     scheduled_date = (stock_move.scheduled_date).strftime("%Y-%m-%d %H:%M")
-                #     scheduled_date = datetime.strftime(
-                #         pytz.utc.localize(datetime.strptime(scheduled_date, "%Y-%m-%d %H:%M")).astimezone(user_timezone),
-                #         "%Y-%m-%d %H:%M"
-                #     )
-                    
-                #     data["date_scheduled"] = scheduled_date
-                    
-                # # Display the processed time using the logged in user's timezone
-                # if stock_move.date_done:
-                #     user_timezone = logged_in_user.tz or pytz.utc
-                #     user_timezone = pytz.timezone(user_timezone)
-                #     date_done = (stock_move.date_done).strftime("%Y-%m-%d %H:%M")
-                #     date_done = datetime.strftime(
-                #         pytz.utc.localize(datetime.strptime(date_done, "%Y-%m-%d %H:%M")).astimezone(user_timezone),
-                #         "%Y-%m-%d %H:%M"
-                #     )
-                    
-                #     data["date_processed"] = date_done
-                
-                # data["stock_move_type_code"] = stock_move.picking_type_code or ""
-                # data["partner"] = {"id": stock_move.partner_id.id, "name": stock_move.partner_id.name} if stock_move.partner_id else {}
-                # data["stock_move_type"] = {"id": stock_move.picking_type_id.id, "name": stock_move.picking_type_id.name} if stock_move.picking_type_id else {}
-                # data["company"] = {"id": stock_move.company_id.id, "name": stock_move.company_id.name} if stock_move.company_id else {}
-                # data["stock_lot"] = {"id": stock_move.lot_id.id, "name": stock_move.lot_id.name} if stock_move.lot_id else {}
-                # data["assigned_user"] = {"id": stock_move.user_id.id, "name": stock_move.user_id.name} if stock_move.user_id else {}
-                # data["stock_moves"] = [
-                #     {
-                #         "id": stock_move.id,
-                #         "description": stock_move.description_picking or "",
-                #         "quantity": stock_move.product_uom_qty,
-                #         "product": {"id": stock_move.product_id.id, "name": stock_move.product_id.name} if stock_move.product_id else {},
-                #         "stock_move_lines": [
-                #             {
-                #                 "id": stock_move_line.id, 
-                #                 "quantity": stock_move_line.quantity,
-                #                 "product": {"id": stock_move_line.product_id.id, "name": stock_move_line.product_id.name} if stock_move_line.product_id else {},
-                #                 "uom": {"id": stock_move_line.product_uom_id.id, "name": stock_move_line.product_uom_id.name} if stock_move_line.product_uom_id else {},
-                #                 "lot": {"id": stock_move_line.lot_id.id, "name": stock_move_line.lot_id.name} if stock_move_line.lot_id else {},
-                #                 "destination_stock_location": {"id": stock_move_line.location_dest_id.id, "name": stock_move_line.location_dest_id.name} if stock_move_line.location_dest_id else {}
-                #             } for stock_move_line in stock_move.move_line_ids
-                #         ] if stock_move.move_line_ids else [] # stock_move.move_line_ids_without_package
-                        
-                #     } for stock_move in stock_move.move_ids_without_package
-                # ] if stock_move.move_ids_without_package else []
+                ] if stock_move.move_line_ids else [] # stock_move.move_line_ids_without_package
                                     
                 response_data["code"] = 200
                 response_data["message"] = "Success"
@@ -432,89 +421,80 @@ class NaidashStockMove(models.Model):
             logged_in_user = self.env.user
             search_criteria = [("company_id", "=", logged_in_user.company_id.id)]
             
+            if not query_params:
+                response_data["code"] = 400
+                response_data["message"] = "Bad request! Missing query parameters."
+                return response_data
             
-            if query_params.get("stock_move_type_code"):
-                stock_move_type_code = query_params.get("stock_move_type_code")
+            if query_params.get("stock_picking_id"):
+                stock_picking_id = query_params.get("stock_picking_id")
                 search_criteria.append(
-                    ("picking_type_code", "=", stock_move_type_code)
+                    ('picking_id', '=', int(stock_picking_id))
                 )
-                
-            if query_params.get("date_scheduled"):
-                scheduled_date = query_params.get("date_scheduled")
-                search_criteria.append(
-                    ('scheduled_date', '>=', f"{scheduled_date} 00:00:00")
-                )
-                search_criteria.append(
-                    ('scheduled_date', '<=', f"{scheduled_date} 23:59:59")
-                )
-                
-            if query_params.get("status"):
-                status = query_params.get("status")
-                search_criteria.append(
-                    ('state','=', status)
-                )         
 
-            stock_moves = self.env['stock.move'].search(search_criteria)
+            stock_moves = self.env['stock.move'].search(search_criteria, order='id asc')
             
             if stock_moves:
                 for stock_move in stock_moves:
                     data = dict()
                     data["id"] = stock_move.id
-                    data["name"] = stock_move.name or ""
-                    data["status"] = {"id": stock_move.state, "name": dict(stock_move._fields['state'].selection).get(stock_move.state, stock_move.state)}
+                    data["description"] = stock_move.description_picking or ""
+                    data["quantity"] = stock_move.product_uom_qty
+                    data["stock_move_line_quantity"] = stock_move.quantity
+                    data["is_picked"] = stock_move.picked
+                    data["is_locked"] = stock_move.is_locked
+                    data["schedule_date"] = ""
+                    data["due_date"] = ""
                     data["origin"] = stock_move.origin or ""
-                    data["notes"] = stock_move.note or ""
-                    data["date_scheduled"] = ""
-                    data["date_processed"] = ""
                     
-                    # Display the scheduled time using the logged in user's timezone
-                    if stock_move.scheduled_date:
+                    # Display the scheduled date using the logged in user's timezone
+                    if stock_move.date:
                         user_timezone = logged_in_user.tz or pytz.utc
                         user_timezone = pytz.timezone(user_timezone)
-                        scheduled_date = (stock_move.scheduled_date).strftime("%Y-%m-%d %H:%M")
+                        scheduled_date = (stock_move.date).strftime("%Y-%m-%d %H:%M")
                         scheduled_date = datetime.strftime(
                             pytz.utc.localize(datetime.strptime(scheduled_date, "%Y-%m-%d %H:%M")).astimezone(user_timezone),
                             "%Y-%m-%d %H:%M"
                         )
                         
-                        data["date_scheduled"] = scheduled_date
+                        data["schedule_date"] = scheduled_date
                         
-                    # Display the processed time using the logged in user's timezone
-                    if stock_move.date_done:
+                    # Display the due date using the logged in user's timezone
+                    if stock_move.date_deadline:
                         user_timezone = logged_in_user.tz or pytz.utc
                         user_timezone = pytz.timezone(user_timezone)
-                        date_done = (stock_move.date_done).strftime("%Y-%m-%d %H:%M")
+                        date_done = (stock_move.date_deadline).strftime("%Y-%m-%d %H:%M")
                         date_done = datetime.strftime(
                             pytz.utc.localize(datetime.strptime(date_done, "%Y-%m-%d %H:%M")).astimezone(user_timezone),
                             "%Y-%m-%d %H:%M"
                         )
                         
-                        data["date_processed"] = date_done
+                        data["due_date"] = date_done
                         
-                    data["stock_move_type_code"] = stock_move.picking_type_code or ""
-                    data["partner"] = {"id": stock_move.partner_id.id, "name": stock_move.partner_id.name} if stock_move.partner_id else {}
-                    data["stock_move_type"] = {"id": stock_move.picking_type_id.id, "name": stock_move.picking_type_id.name} if stock_move.picking_type_id else {}
-                    data["company"] = {"id": stock_move.company_id.id, "name": stock_move.company_id.name} if stock_move.company_id else {}
-                    data["assigned_user"] = {"id": stock_move.user_id.id, "name": stock_move.user_id.name} if stock_move.user_id else {}                
-                    data["stock_moves"] = [
+                    data["status"] = {"id": stock_move.state, "name": dict(stock_move._fields['state'].selection).get(stock_move.state, stock_move.state)}
+                    data["stock_picking"] = {"id": stock_move.picking_id.id, "name": stock_move.picking_id.name} if stock_move.picking_id else {}
+                    data["product"] = {"id": stock_move.product_id.id, "name": stock_move.product_id.name} if stock_move.product_id else {}
+                    data["uom"] = {"id": stock_move.product_uom.id, "name": stock_move.product_uom.name} if stock_move.product_uom else {}
+                    data["source_stock_location"] = {"id": stock_move.location_id.id, "name": stock_move.location_id.name} if stock_move.location_id else {}
+                    data["destination_stock_location"] = {"id": stock_move.location_dest_id.id, "name": stock_move.location_dest_id.name} if stock_move.location_dest_id else {}
+                    data["stock_lots"] = [
                         {
-                            "id": stock_move.id,
-                            "description": stock_move.description_picking or "",
-                            "quantity": stock_move.product_uom_qty,
-                            "product": {"id": stock_move.product_id.id, "name": stock_move.product_id.name} if stock_move.product_id else {},
-                            "stock_move_lines": [
-                                {
-                                    "id": stock_move_line.id, 
-                                    "quantity": stock_move_line.quantity,
-                                    "product": {"id": stock_move_line.product_id.id, "name": stock_move_line.product_id.name} if stock_move_line.product_id else {},
-                                    "uom": {"id": stock_move_line.product_uom_id.id, "name": stock_move_line.product_uom_id.name} if stock_move_line.product_uom_id else {},
-                                    "lot": {"id": stock_move_line.lot_id.id, "name": stock_move_line.lot_id.name} if stock_move_line.lot_id else {},
-                                    "destination_stock_location": {"id": stock_move_line.location_dest_id.id, "name": stock_move_line.location_dest_id.name} if stock_move_line.location_dest_id else {}
-                                } for stock_move_line in stock_move.move_line_ids
-                            ] if stock_move.move_line_ids else [] # stock_move.move_line_ids_without_package
-                            
-                        } for stock_move in stock_move.move_ids_without_package
-                    ] if stock_move.move_ids_without_package else []
+                            "id": lot.id, 
+                            "name": lot.name
+                        } for lot in stock_move.lot_ids
+                    ] if stock_move.lot_ids else []
+                    
+                    data["stock_move_lines"] = [
+                        {
+                            "id": stock_move_line.id, 
+                            "quantity": stock_move_line.quantity,
+                            "product": {"id": stock_move_line.product_id.id, "name": stock_move_line.product_id.name} if stock_move_line.product_id else {},
+                            "uom": {"id": stock_move_line.product_uom_id.id, "name": stock_move_line.product_uom_id.name} if stock_move_line.product_uom_id else {},
+                            "lot": {"id": stock_move_line.lot_id.id, "name": stock_move_line.lot_id.name} if stock_move_line.lot_id else {},
+                            "source_stock_location": {"id": stock_move_line.location_id.id, "name": stock_move_line.location_id.name} if stock_move_line.location_id else {},
+                            "destination_stock_location": {"id": stock_move_line.location_dest_id.id, "name": stock_move_line.location_dest_id.name} if stock_move_line.location_dest_id else {}
+                        } for stock_move_line in stock_move.move_line_ids
+                    ] if stock_move.move_line_ids else [] # stock_move.move_line_ids_without_package
                     
                     all_stock_moves.append(data)
                 
@@ -547,6 +527,12 @@ class NaidashStockMove(models.Model):
         try:
             response_data = dict()
             logged_in_user = self.env.user
+            
+            if not request_data:
+                response_data["code"] = 400
+                response_data["message"] = "Bad request! Empty JSON body received."
+                return response_data
+                        
             serial_numbers = request_data.get("serial_numbers")
 
             if not isinstance(serial_numbers, list) or not serial_numbers:

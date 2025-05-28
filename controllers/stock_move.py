@@ -132,7 +132,7 @@ class NaidashStockMove(http.Controller):
             stock_move_details = request.env['stock.move'].get_all_the_stock_moves(query_params)
             status_code = stock_move_details.get("code")
             
-            if status_code == 404:
+            if status_code in [400, 404]:
                 data = json.dumps(
                     {
                         "error": stock_move_details

@@ -103,7 +103,7 @@ class NaidashStockPicking(models.Model):
                     )
                     
                     if product:
-                        stock_move["name"] = product.name,
+                        stock_move["name"] = product.name
                         stock_move["product_id"] = product.id
                         stock_move["description_picking"] = product.name
                         stock_move["product_uom_qty"] = float(item.get("quantity")) if float(item.get("quantity")) > 0 else 1
@@ -384,6 +384,7 @@ class NaidashStockPicking(models.Model):
                             {
                                 "id": stock_move_line.id, 
                                 "quantity": stock_move_line.quantity,
+                                "lot_provisional_name": stock_move_line.lot_name or "",
                                 "product": {"id": stock_move_line.product_id.id, "name": stock_move_line.product_id.name} if stock_move_line.product_id else {},
                                 "uom": {"id": stock_move_line.product_uom_id.id, "name": stock_move_line.product_uom_id.name} if stock_move_line.product_uom_id else {},
                                 "lot": {"id": stock_move_line.lot_id.id, "name": stock_move_line.lot_id.name} if stock_move_line.lot_id else {},
@@ -493,6 +494,7 @@ class NaidashStockPicking(models.Model):
                                 {
                                     "id": stock_move_line.id, 
                                     "quantity": stock_move_line.quantity,
+                                    "lot_provisional_name": stock_move_line.lot_name or "",
                                     "product": {"id": stock_move_line.product_id.id, "name": stock_move_line.product_id.name} if stock_move_line.product_id else {},
                                     "uom": {"id": stock_move_line.product_uom_id.id, "name": stock_move_line.product_uom_id.name} if stock_move_line.product_uom_id else {},
                                     "lot": {"id": stock_move_line.lot_id.id, "name": stock_move_line.lot_id.name} if stock_move_line.lot_id else {},

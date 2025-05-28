@@ -20,127 +20,93 @@ class NaidashStockMove(models.Model):
         try:
             vals = dict()
             data = dict()
-            response_data = dict(code=204,message="Failed to create the stock move")
-            items_to_receive = []
+            missing_fields = []
             logged_in_user = self.env.user            
+            response_data = dict(code=204,message="Failed to create the stock move")
+            
+            if not request_data:
+                response_data["code"] = 400
+                response_data["message"] = "Bad request! Empty JSON body received."
+                return response_data
                                     
-            partner_id = request_data.get("partner_id")
-            stock_move_type_id = request_data.get("stock_move_type_id")
-            assigned_user_id = request_data.get("assigned_user_id")
-            stock_moves = request_data.get("stock_moves")
-            # procurement_group_id = request_data.get("procurement_group_id")
+            stock_picking_id = request_data.get("stock_picking_id")
+            product_id = request_data.get("product_id")
+            schedule_date = request_data.get("schedule_date")
+            quantity = request_data.get("quantity")            
             
-            vals["scheduled_date"] = request_data.get("date_scheduled")
-            vals["note"] = request_data.get("notes")
-            vals["origin"] = request_data.get("origin")
-            
-            if not partner_id:
-                response_data["code"] = 400
-                response_data["message"] = "Bad Request! Expected the partner's id"
-                return response_data
-
-            if not stock_move_type_id:
-                response_data["code"] = 400
-                response_data["message"] = "Bad Request! Expected the stock move type id"
-                return response_data
-            
-            if not stock_moves:
-                response_data["code"] = 400
-                response_data["message"] = "Bad Request! Add the items to be received, delivered or transferred"
-                return response_data
-                            
-            if isinstance(stock_moves, list) == False:
-                response_data["code"] = 422
-                response_data["message"] = "Unprocessable Content! Expected a list of objects in `stock_moves`"
-                return response_data
-            
-            if assigned_user_id:
-                user = self.env['res.users'].search(
-                    [
-                        ('id', '=', int(assigned_user_id)),
-                        ('company_id', '=', logged_in_user.company_id.id)
-                    ]
-                )
+            if not stock_picking_id:
+                missing_fields.append("stock_picking_id")
+            if not product_id:
+                missing_fields.append("product_id")
+            if not quantity:
+                missing_fields.append("quantity")
                 
-                if user:
-                    vals["user_id"] = user.id
-                else:
-                    response_data["code"] = 404
-                    response_data["message"] = "User not found!"
-                    return response_data                
+            if missing_fields:
+                response_data["code"] = 400
+                response_data["message"] = f"Bad Request! The following parameters are required: {', '.join(missing_fields)}"
+                return response_data
             
-            partner = self.env['res.partner'].browse(int(partner_id))
-            stock_move_type = self.env['stock.move.type'].search(
+            stock_picking = self.env['stock.picking'].search(
                 [
-                    ("id", "=", int(stock_move_type_id)),
+                    ("id", "=", int(stock_picking_id)),
                     ("company_id", "=", logged_in_user.company_id.id)
                 ]
             )
             
-            if partner:
-                vals["partner_id"] = partner.id
+            if stock_picking:
+                if stock_picking.state in ['done']:
+                    response_data["code"] = 403
+                    response_data["message"] = f"Cannot add items to {stock_picking.name} because it is already completed."
+                    return response_data
+                
+                vals["picking_id"] = stock_picking.id
+                
+                if stock_picking.picking_type_id and stock_picking.picking_type_id.default_location_src_id:
+                    vals["location_id"] = stock_picking.picking_type_id.default_location_src_id.id
+                elif stock_picking.partner_id and stock_picking.partner_id.property_stock_supplier:
+                    vals["location_id"] = stock_picking.partner_id.property_stock_supplier.id
+                else:
+                    vals["location_id"] = self.env['stock.warehouse']._get_partner_locations()
+
+                if stock_picking.picking_type_id and stock_picking.picking_type_id.default_location_dest_id:
+                    vals["location_dest_id"] = stock_picking.picking_type_id.default_location_dest_id.id
+                elif stock_picking.partner_id and stock_picking.partner_id.property_stock_customer:
+                    vals["location_dest_id"] = stock_picking.partner_id.property_stock_customer.id
+                else:
+                    vals["location_dest_id"] = self.env['stock.warehouse']._get_partner_locations()
+                
             else:
                 response_data["code"] = 404
-                response_data["message"] = "Partner not found!"
-                return response_data                
-            
-            if stock_move_type:
-                vals["picking_type_id"] = stock_move_type.id               
-            else:
-                response_data["code"] = 404
-                response_data["message"] = "Operation type not found!"
+                response_data["message"] = "Stock picking not found!"
                 return response_data
             
-            for item in stock_moves:
-                stock_move = dict()
-                product_id = item.get("product_id")
-                
-                if product_id:
-                    product = self.env['product.product'].search(
-                        [
-                            ('id', '=', int(product_id)),
-                            ('detailed_type', 'in', ['product', 'consu'])
-                        ]
-                    )
-                    
-                    if product:
-                        stock_move["name"] = product.name,
-                        stock_move["product_id"] = product.id
-                        stock_move["description_picking"] = product.name
-                        stock_move["product_uom_qty"] = float(item.get("quantity")) if float(item.get("quantity")) > 0 else 1
-                        #  stock_move["lot_ids"]
-                        
-                        if stock_move_type.default_location_src_id:
-                            stock_move["location_id"] = stock_move_type.default_location_src_id.id
-                        elif partner.property_stock_supplier:
-                            stock_move["location_id"] = partner.property_stock_supplier.id
-                        else:
-                            stock_move["location_id"] = self.env['stock.warehouse']._get_partner_locations()
-
-                        if stock_move_type.default_location_dest_id:
-                            stock_move["location_dest_id"] = stock_move_type.default_location_dest_id.id
-                        elif partner.property_stock_customer:
-                            stock_move["location_dest_id"] = partner.property_stock_customer.id
-                        else:
-                            stock_move["location_dest_id"] = self.env['stock.warehouse']._get_partner_locations()
-                    else:
-                        response_data["code"] = 404
-                        response_data["message"] = "Product not found!"
-                        return response_data                            
-                            
-                if stock_move:                        
-                    items_to_receive.append((0, 0, stock_move))
-                    
-            if items_to_receive:
-                vals["move_ids_without_package"] = items_to_receive
+            product = self.env['product.product'].search(
+                [
+                    ('id', '=', int(product_id)),
+                    ('detailed_type', 'in', ['product', 'consu'])
+                ]
+            )            
             
-                stock_move = self.env['stock.move'].create(vals)
+            if product:
+                vals["name"] = product.name
+                vals["product_id"] = product.id
+                vals["description_picking"] = product.name
+            else:
+                response_data["code"] = 404
+                response_data["message"] = "Product not found!"
+                return response_data                
+            
+            vals["date"] = schedule_date
+            vals["product_uom_qty"] = float(quantity) if float(quantity) > 0 else 1
+            
+            stock_move = self.env['stock.move'].create(vals)
+            
+            if stock_move:
+                data['id'] = stock_move.id
+                response_data["code"] = 201
+                response_data["message"] = "Created successfully"
+                response_data["data"] = data
                 
-                if stock_move:
-                    data['id'] = stock_move.id
-                    response_data["code"] = 201
-                    response_data["message"] = "Created successfully"
-                    response_data["data"] = data
             return response_data
         except SessionExpiredException as e:
             logger.error(f"The session has expired:\n\n{str(e)}")
@@ -388,13 +354,14 @@ class NaidashStockMove(models.Model):
                     {
                         "id": stock_move_line.id, 
                         "quantity": stock_move_line.quantity,
+                        "lot_provisional_name": stock_move_line.lot_name or "",
                         "product": {"id": stock_move_line.product_id.id, "name": stock_move_line.product_id.name} if stock_move_line.product_id else {},
                         "uom": {"id": stock_move_line.product_uom_id.id, "name": stock_move_line.product_uom_id.name} if stock_move_line.product_uom_id else {},
                         "lot": {"id": stock_move_line.lot_id.id, "name": stock_move_line.lot_id.name} if stock_move_line.lot_id else {},
                         "source_stock_location": {"id": stock_move_line.location_id.id, "name": stock_move_line.location_id.name} if stock_move_line.location_id else {},
                         "destination_stock_location": {"id": stock_move_line.location_dest_id.id, "name": stock_move_line.location_dest_id.name} if stock_move_line.location_dest_id else {}
                     } for stock_move_line in stock_move.move_line_ids
-                ] if stock_move.move_line_ids else [] # stock_move.move_line_ids_without_package
+                ] if stock_move.move_line_ids else []
                                     
                 response_data["code"] = 200
                 response_data["message"] = "Success"
@@ -488,6 +455,7 @@ class NaidashStockMove(models.Model):
                         {
                             "id": stock_move_line.id, 
                             "quantity": stock_move_line.quantity,
+                            "lot_provisional_name": stock_move_line.lot_name or "",
                             "product": {"id": stock_move_line.product_id.id, "name": stock_move_line.product_id.name} if stock_move_line.product_id else {},
                             "uom": {"id": stock_move_line.product_uom_id.id, "name": stock_move_line.product_uom_id.name} if stock_move_line.product_uom_id else {},
                             "lot": {"id": stock_move_line.lot_id.id, "name": stock_move_line.lot_id.name} if stock_move_line.lot_id else {},
@@ -551,7 +519,10 @@ class NaidashStockMove(models.Model):
                 for serial_no in serial_numbers:
                     try:
                         serial_no = "".join(serial_no.split())
-                        stock_move._generate_serial_numbers(serial_no, next_serial_count=1)
+                        
+                        if stock_move.product_id.tracking == "serial":
+                            stock_move._generate_serial_numbers(serial_no, next_serial_count=1)
+                        # return to the user which serial numbers were created vs failed to create
                     except (ValidationError, UserError) as e:
                         logger.warning(f"Failed to assign serial number '{serial_no}': {str(e)}")
                         continue
